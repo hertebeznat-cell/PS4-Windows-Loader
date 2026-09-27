@@ -1,0 +1,51 @@
+name: PS4 Windows Loader CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage0-core:
+    name: Build Stage 0 portable core
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld
+
+      - name: Compile loader core
+        run: |
+          mkdir -p build
+          clang \
+            -std=c11 \
+            -Wall -Wextra -Wpedantic -Werror \
+            -ffreestanding \
+            -fno-stack-protector \
+            -fno-builtin \
+            -Iloader/include \
+            -c loader/src/main.c \
+            -o build/ps4wl-main.o
+
+      - name: Inspect object
+        run: |
+          file build/ps4wl-main.o
+          llvm-readelf -h build/ps4wl-main.o
+          llvm-nm -g build/ps4wl-main.o
+
+      - name: Upload Stage 0 object
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Stage0
+          path: build/ps4wl-main.o
+          retention-days: 30
