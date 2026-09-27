@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-3.5%20firmware%20services-blueviolet)
+![Stage](https://img.shields.io/badge/stage-3.6%20final%20pre--entry%20preflight-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -161,8 +161,6 @@ PS4 Windows Loader: Stage 3.3 BCD EFI read self-test OK
 
 ## Stage 3.4 — pre-Boot-Manager services ✅
 
-Stage 3.4 is **hardware-verified**.
-
 Confirmed:
 
 - `EFI_FILE_PROTOCOL.GetInfo`;
@@ -186,25 +184,56 @@ Stage 3.4: CRC/CopyMem/SetMem/Stall OK
 PS4 Windows Loader: Stage 3.4 pre-bootmgr services self-test OK
 ```
 
-## Stage 3.5 — event/runtime/MapKey firmware layer 🚧
+## Stage 3.5 — event/runtime/MapKey firmware layer ✅
 
-Current development stage.
+Stage 3.5 is **hardware-verified**.
 
-Stage 3.5 adds and self-tests:
+Confirmed:
 
 - `RaiseTPL` / `RestoreTPL`;
 - `CreateEvent` / `SignalEvent` / `WaitForEvent` / `CheckEvent` / `CloseEvent`;
 - `SetTimer` and `CreateEventEx` slots;
 - `GetNextMonotonicCount`;
 - `SetWatchdogTimer`;
-- a correctly ordered `EFI_RUNTIME_SERVICES` table;
-- UEFI variable fallback semantics (`GetVariable` → `EFI_NOT_FOUND`, writes protected);
-- Runtime Services publication in `EFI_SYSTEM_TABLE`;
+- ordered `EFI_RUNTIME_SERVICES` table publication;
+- UEFI variable fallback semantics;
 - System Table / Boot Services / Runtime Services CRC refresh;
-- `GetMemoryMap` MapKey change tracking after allocations;
+- `GetMemoryMap` MapKey changes after allocation;
 - `ExitBootServices` MapKey validation.
 
-Stage 3.5 is built in CI and awaits real-hardware confirmation.
+```text
+PS4 Windows Loader: Stage 3.5 started
+Stage 3.5: event + Runtime Services installed
+Stage 3.5: RuntimeServices table published
+Stage 3.5: Create/Signal/Wait/Check/CloseEvent OK
+Stage 3.5: Runtime variable fallback semantics OK
+Stage 3.5: GetMemoryMap MapKey tracking OK
+Stage 3.5: ExitBootServices MapKey validation OK
+PS4 Windows Loader: Stage 3.5 pre-entry firmware self-test OK
+```
+
+## Stage 3.6 — final pre-entry Boot Manager preflight 🚧
+
+Current development stage. Stage 3.6 intentionally still **does not execute Microsoft `bootmgfw.efi`**.
+
+The final dry-run adds and tests:
+
+- tracked EFI page/pool allocations in `GetMemoryMap`;
+- a larger conventional-memory arena for firmware testing;
+- `LocateHandle`;
+- `LocateDevicePath`;
+- tracked `LocateHandleBuffer` / `ProtocolsPerHandle` allocations;
+- `OpenProtocolInformation` fallback semantics;
+- `RegisterProtocolNotify` plumbing;
+- `InstallConfigurationTable` add/remove semantics;
+- non-null typed fallbacks for additional Boot Services such as protocol installation, image loading and controller services;
+- corrected PE section-copy semantics without clamping raw data to `VirtualSize`;
+- loading `bootmgfw.efi` into an EFI LoaderCode allocation represented in the memory map;
+- complete `EFI_LOADED_IMAGE_PROTOCOL` image base/size metadata;
+- a real Media FilePath device-path node for `\\EFI\\Microsoft\\Boot\\bootmgfw.efi`;
+- final calculation of the Microsoft EFI entry address.
+
+If Stage 3.6 passes on hardware, the next milestone is the **first controlled call into Microsoft Boot Manager code**.
 
 ---
 
@@ -229,7 +258,9 @@ Read Windows BCD through EFI              ✅
         ↓
 Metadata / protocol helpers               ✅
         ↓
-Runtime / events / MapKey hardening       🚧
+Runtime / events / MapKey hardening       ✅
+        ↓
+Final Boot Manager entry preflight        🚧
         ↓
 First controlled bootmgfw.efi entry       ⏳
         ↓
@@ -259,10 +290,13 @@ ntoskrnl.exe                              ⏳
 - [x] `LocateHandleBuffer`
 - [x] `ProtocolsPerHandle`
 - [x] CRC / memory helpers / Stall
-- [ ] Stage 3.5 hardware verification
+- [x] events / timers baseline
+- [x] Runtime Services baseline
+- [x] `ExitBootServices` MapKey validation
+- [ ] Stage 3.6 hardware verification
 - [ ] directory enumeration as required
 - [ ] fuller timer semantics as required
-- [ ] more accurate physical memory map
+- [ ] real platform/physical memory description for Windows handoff
 - [ ] additional protocols requested by Boot Manager
 
 ### Windows Boot Manager
@@ -303,7 +337,8 @@ PS4-Windows-Loader/
 │   ├── stage3_2.c
 │   ├── stage3_3.c
 │   ├── stage3_4.c         # hardware verified
-│   └── stage3_5.c         # current development payload
+│   ├── stage3_5.c         # hardware verified
+│   └── stage3_6.c         # current development payload
 ├── loader/
 │   ├── include/
 │   └── src/
