@@ -2,11 +2,12 @@
 #include <sys/fcntl.h>
 #include <unistd.h>
 #include <stddef.h>
-#include <stdint.h>
 
 void *dlopen(const char *path, int mode);
 void *dlsym(void *handle, const char *name);
 
+typedef unsigned short u16;
+typedef unsigned int u32;
 typedef int (*notify_fn_t)(int, const char *);
 
 #define IMAGE_FILE_MACHINE_AMD64 0x8664U
@@ -50,17 +51,17 @@ static void notify(const char *msg)
     log_line(msg);
 }
 
-static uint16_t u16le(const unsigned char *p)
+static u16 u16le(const unsigned char *p)
 {
-    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+    return (u16)p[0] | ((u16)p[1] << 8);
 }
 
-static uint32_t u32le(const unsigned char *p)
+static u32 u32le(const unsigned char *p)
 {
-    return (uint32_t)p[0]
-         | ((uint32_t)p[1] << 8)
-         | ((uint32_t)p[2] << 16)
-         | ((uint32_t)p[3] << 24);
+    return (u32)p[0]
+         | ((u32)p[1] << 8)
+         | ((u32)p[2] << 16)
+         | ((u32)p[3] << 24);
 }
 
 static int read_header(const char *path)
@@ -80,10 +81,10 @@ static int read_header(const char *path)
 
 static int valid_x64_efi_image(const unsigned char *data, size_t size)
 {
-    uint32_t peoff;
+    u32 peoff;
     const unsigned char *coff;
     const unsigned char *optional;
-    uint16_t opt_size;
+    u16 opt_size;
 
     if (!data || size < 0x80U)
         return 0;
