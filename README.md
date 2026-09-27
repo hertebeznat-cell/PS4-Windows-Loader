@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-4.0%20bootmgfw%20entry%20probe-blueviolet)
+![Stage](https://img.shields.io/badge/stage-4.1%20HandleProtocol%20diagnostics-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -212,8 +212,6 @@ PS4 Windows Loader: Stage 3.5 pre-entry firmware self-test OK
 
 ## Stage 3.6 — final pre-entry Boot Manager preflight ✅
 
-Stage 3.6 is **hardware-verified** and still intentionally does not execute Microsoft code.
-
 Confirmed:
 
 - tracked EFI page/pool allocations in `GetMemoryMap`;
@@ -242,19 +240,40 @@ Stage 3.6: bootmgfw entry preflight ready - Microsoft code NOT called yet
 PS4 Windows Loader: Stage 3.6 final pre-entry self-test OK
 ```
 
-## Stage 4.0 — first real Microsoft Boot Manager entry 🚧
+## Stage 4.0 — first real Microsoft Boot Manager entry ✅
 
-Current development stage. Stage 4.0 performs the project's first actual call to the mapped Microsoft EFI entry point:
+Stage 4.0 crossed the first real Microsoft-code boundary on hardware.
+
+Confirmed on the PS4:
+
+- the mapped `bootmgfw.efi` EFI entry point was called with our `ImageHandle` and `EFI_SYSTEM_TABLE`;
+- Microsoft code began executing;
+- Microsoft code called our `BootServices->HandleProtocol()` callback;
+- the last observed trace was `Stage 4.0 trace: HandleProtocol`.
 
 ```text
-bootmgfw_entry(ImageHandle, SystemTable)
+Stage 4.0: ENTERING Microsoft bootmgfw.efi NOW
+Stage 4.0 trace: HandleProtocol
 ```
 
-Before entry it adds a minimal text-input environment, non-null text-output methods, a basic successful `GetTime`, tracked allocations and low-volume EFI call tracing. The goal of this stage is not to reach the Windows desktop in one attempt: it is to prove that Microsoft code executes and identify the next missing EFI service/protocol from the last trace or returned `EFI_STATUS`.
+This confirms real `bootmgfw.efi` execution, but Stage 4.0 does not yet show whether the stop occurs inside our protocol lookup or immediately after returning the requested protocol to Microsoft.
 
-Expected early traces include calls such as `HandleProtocol`, `OpenProtocol`, `LocateProtocol`, `GetVariable`, `GetMemoryMap`, file access, and potentially an unsupported `LoadImage` once Boot Manager tries to move deeper into the Windows boot chain.
+## Stage 4.1 — first HandleProtocol diagnostic 🚧
 
-> Stage 4.0 can legitimately hang or crash the console. A hang after the `ENTERING Microsoft bootmgfw.efi NOW` message is still useful data if the last trace message is reported.
+Current development stage.
+
+Stage 4.1 replaces the first `HandleProtocol` path with a deliberately direct diagnostic implementation. It identifies:
+
+- whether the handle is the `bootmgfw.efi` ImageHandle, the USB DeviceHandle, or unknown;
+- whether the requested protocol is Loaded Image, Device Path, Simple File System, or an unknown GUID;
+- the unknown GUID `Data1` value when necessary;
+- validation of `LoadedImage.SystemTable`;
+- validation of `ImageBase` / `ImageSize`;
+- validation of `DeviceHandle`;
+- validation of the loaded-image FilePath;
+- the exact point immediately before returning `EFI_SUCCESS` to Microsoft.
+
+The lookup is intentionally performed directly instead of calling the older generic `protocol32()` helper. This isolates the Stage 4.0 stop to either the callback itself or Microsoft's use of the returned protocol.
 
 ---
 
@@ -283,9 +302,13 @@ Runtime / events / MapKey hardening       ✅
         ↓
 Final Boot Manager entry preflight        ✅
         ↓
-First controlled bootmgfw.efi entry       🚧
+Real bootmgfw.efi entry execution         ✅
         ↓
-Windows Boot Manager                      ⏳
+First Microsoft HandleProtocol request    ✅
+        ↓
+HandleProtocol return-path diagnostics    🚧
+        ↓
+Windows Boot Manager deeper execution     ⏳
         ↓
 winload.efi                               ⏳
         ↓
@@ -321,8 +344,10 @@ ntoskrnl.exe                              ⏳
 - [ ] additional protocols requested by Boot Manager
 
 ### Windows Boot Manager
-- [ ] Stage 4.0 first controlled `bootmgfw.efi` entry hardware test
-- [ ] trace EFI service/protocol calls
+- [x] Stage 4.0 first controlled `bootmgfw.efi` entry on real hardware
+- [x] observe first Microsoft `HandleProtocol` call
+- [ ] Stage 4.1 identify first HandleProtocol handle/GUID and return boundary
+- [ ] trace subsequent EFI service/protocol calls
 - [ ] implement missing dependencies as encountered
 - [ ] Boot Manager consumes BCD
 - [ ] reach `winload.efi`
@@ -360,7 +385,8 @@ PS4-Windows-Loader/
 │   ├── stage3_4.c         # hardware verified
 │   ├── stage3_5.c         # hardware verified
 │   ├── stage3_6.c         # hardware verified
-│   └── stage4_0.c         # current Microsoft entry probe
+│   ├── stage4_0.c         # Microsoft entry reached HandleProtocol
+│   └── stage4_1.c         # current HandleProtocol diagnostic
 ├── loader/
 │   ├── include/
 │   └── src/
