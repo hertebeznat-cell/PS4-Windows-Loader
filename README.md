@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-3.3%20BCD%20EFI%20read-blueviolet)
+![Stage](https://img.shields.io/badge/stage-3.4%20pre--bootmgr%20services-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -173,7 +173,7 @@ Confirmed on real hardware:
 
 ### Stage 3.3 — BCD through EFI File Protocol ✅
 
-Stage 3.3 is now verified on real PS4 hardware.
+Stage 3.3 is verified on real PS4 hardware.
 
 The loader opens the real Windows Boot Configuration Data file through the project's UEFI-style filesystem bridge:
 
@@ -205,7 +205,25 @@ Stage 3.3: BCD Close OK
 PS4 Windows Loader: Stage 3.3 BCD EFI read self-test OK
 ```
 
-This proves that the compatibility layer can now reach both the Microsoft EFI executable and its real BCD data through UEFI-style file APIs. **Microsoft Boot Manager itself has not been entered yet.**
+This proves that the compatibility layer can reach both the Microsoft EFI executable and its real BCD data through UEFI-style file APIs. **Microsoft Boot Manager itself has not been entered yet.**
+
+### Stage 3.4 — pre-Boot-Manager services 🚧
+
+Current development fills in more of the UEFI surface expected before the first controlled call into `bootmgfw.efi`.
+
+The Stage 3.4 hardware self-test covers:
+
+- `EFI_FILE_PROTOCOL.GetInfo` with `EFI_FILE_INFO` sizing semantics;
+- BCD file size and filename metadata without disturbing the active file position;
+- `OpenProtocol` / `CloseProtocol` plumbing;
+- `LocateHandleBuffer` by protocol;
+- `ProtocolsPerHandle`;
+- `CalculateCrc32`;
+- `CopyMem` / `SetMem`;
+- `Stall`;
+- continued access to the real BCD file through the EFI filesystem bridge.
+
+Stage 3.4 is built in CI and is **awaiting real-hardware confirmation**.
 
 ---
 
@@ -236,7 +254,10 @@ EFI File Protocol bridge                  ✅
 Read real Windows BCD via EFI             ✅
         │
         ▼
-Complete services needed by bootmgfw      🚧
+File metadata + protocol services         🚧
+        │
+        ▼
+Runtime/event/memory-map hardening        ⏳
         │
         ▼
 Enter bootmgfw.efi                         ⏳
@@ -285,12 +306,12 @@ ntoskrnl.exe                              ⏳
 - [x] Simple File System protocol
 - [x] EFI File Protocol bridge
 - [x] BCD open/read/seek through EFI File Protocol
-- [ ] `GetInfo` / file metadata
+- [ ] `GetInfo` / file metadata — Stage 3.4 test pending
+- [ ] `OpenProtocol` / `CloseProtocol` — Stage 3.4 test pending
+- [ ] `LocateHandleBuffer` — Stage 3.4 test pending
+- [ ] `ProtocolsPerHandle` — Stage 3.4 test pending
+- [ ] CRC / CopyMem / SetMem / Stall — Stage 3.4 test pending
 - [ ] directory enumeration
-- [ ] `OpenProtocol` / `CloseProtocol`
-- [ ] `LocateHandle` / `LocateHandleBuffer`
-- [ ] `ProtocolsPerHandle`
-- [ ] CRC / CopyMem / SetMem / Stall
 - [ ] minimal event/timer support
 - [ ] Runtime Services stubs/semantics
 - [ ] more accurate memory map + MapKey tracking
@@ -348,7 +369,8 @@ PS4-Windows-Loader/
 │   ├── stage3.c
 │   ├── stage3_1.c
 │   ├── stage3_2.c
-│   └── stage3_3.c         # latest hardware-verified stage
+│   ├── stage3_3.c         # latest hardware-verified stage
+│   └── stage3_4.c         # current development payload
 ├── loader/
 │   ├── include/
 │   └── src/
