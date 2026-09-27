@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-3.2%20EFI%20File%20Protocol-blueviolet)
+![Stage](https://img.shields.io/badge/stage-3.3%20BCD%20EFI%20read-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -22,8 +22,6 @@
 
 **PS4 Windows Loader** is an experimental open-source project exploring a real **bare-metal Windows boot path on PlayStation 4 hardware**.
 
-The intended boot chain is:
-
 ```text
 PS4 jailbreak / payload entry
           │
@@ -31,11 +29,11 @@ PS4 jailbreak / payload entry
 PS4 Windows Loader
           │
           ├── PS4 hardware handoff
-          ├── memory/platform discovery
-          ├── ACPI tables
-          ├── framebuffer
-          ├── USB/storage bootstrap
-          └── UEFI-compatible environment
+          ├── PE/COFF loader
+          ├── UEFI-compatible environment
+          ├── USB filesystem bridge
+          ├── memory/platform description
+          └── later: ACPI / framebuffer / drivers
           │
           ▼
 Microsoft bootmgfw.efi
@@ -65,19 +63,19 @@ The repository does not contain Windows ISOs, product keys, Microsoft binaries, 
 | CPU | AMD Jaguar x86-64 |
 | GPU | AMD Liverpool |
 | Test firmware | **13.52** |
-| Display target | Existing HDMI framebuffer first |
 | Boot media | External USB first |
+| Display target | Existing HDMI framebuffer first |
 | Windows targets | Windows 11 / Windows Server 2025 |
 
 Development is intentionally focused on one known machine before expanding to other PS4 revisions.
 
-> **Safety rule for development:** early experiments use external USB media. Do not repartition or overwrite the PS4 internal system drive while the boot path is still experimental.
+> **Safety rule:** early experiments use external USB media. Do not repartition or overwrite the PS4 internal system drive while the boot path is still experimental.
 
 ---
 
 ## ✅ Verified real-hardware progress
 
-The following milestones have been tested successfully on a real **PS4 Slim CUH-2208B / Baikal / firmware 13.52**.
+The milestones below have been tested successfully on a real **PS4 Slim CUH-2208B / Baikal / firmware 13.52**.
 
 ### Stage 1 — PS4 payload execution ✅
 
@@ -85,20 +83,18 @@ Confirmed:
 
 - freestanding `.bin` payload executes on PS4;
 - PS4 system notifications work;
-- Orbis USB mount points can be accessed from the payload;
-- Windows EFI file paths can be probed directly.
+- Orbis USB mount points are accessible;
+- Windows EFI paths can be probed directly.
 
 ### Stage 2.5 — Windows EFI image loader ✅
 
-The loader successfully:
+Confirmed:
 
 - opens `/mnt/usb0/EFI/Microsoft/Boot/bootmgfw.efi`;
-- reads the complete file into memory;
-- validates DOS + PE/COFF headers;
-- validates **AMD64 / PE32+ / EFI Application** format;
-- allocates an in-memory executable image;
-- maps PE sections to their virtual addresses;
-- applies `IMAGE_REL_BASED_DIR64` base relocations;
+- streams the complete file into memory;
+- validates AMD64 / PE32+ / EFI Application headers;
+- maps PE sections;
+- applies `IMAGE_REL_BASED_DIR64` relocations;
 - resolves the EFI image entry point.
 
 Real-hardware success sequence:
@@ -112,17 +108,15 @@ Stage 2.5: sections mapped OK
 PS4 Windows Loader: Stage 2.5 PE map + relocations OK
 ```
 
-### Stage 3 — EFI System Table + x64 ABI ✅
+### Stage 3 — EFI System Table + Microsoft x64 ABI ✅
 
-Confirmed on hardware:
+Confirmed:
 
 - minimal `EFI_SYSTEM_TABLE` construction;
-- correct EFI System Table signature;
 - EFI console `OutputString` callback path;
 - Microsoft x64 / UEFI calling convention (`ms_abi`);
-- successful re-read and validation of `bootmgfw.efi`;
-- executable PE image mapping and relocations;
-- calculation of the real Microsoft Boot Manager entry point.
+- executable mapping of `bootmgfw.efi`;
+- Microsoft Boot Manager entry-point preparation.
 
 Real-hardware success sequence:
 
@@ -139,13 +133,11 @@ Stage 3: bootmgfw executable image ready
 
 ### Stage 3.1 — first EFI Boot Services ✅
 
-Stage 3.1 is now verified on real hardware as well.
-
 Confirmed:
 
 - `AllocatePool` / `FreePool`;
 - `AllocatePages` / `FreePages`;
-- `GetMemoryMap` size/query semantics;
+- `GetMemoryMap` query semantics;
 - `HandleProtocol`;
 - `LocateProtocol`;
 - Loaded Image protocol publication;
@@ -166,21 +158,54 @@ Stage 3.1: SimpleFileSystem protocol published
 PS4 Windows Loader: Stage 3.1 EFI Boot Services self-test OK
 ```
 
-### Stage 3.2 — EFI file bridge 🚧
+### Stage 3.2 — EFI File Protocol bridge ✅
 
-Current development is bridging UEFI file operations to the PS4's mounted USB filesystem.
-
-The Stage 3.2 self-test covers:
+Confirmed on real hardware:
 
 - `SimpleFileSystem.OpenVolume`;
 - `EFI_FILE_PROTOCOL.Open`;
-- read-only access through a UEFI-style file handle;
+- read-only EFI-style file handles;
 - `Read`;
-- `GetPosition` / `SetPosition` without depending on `SEEK_END`;
+- `GetPosition` / `SetPosition`;
 - `Close`;
-- opening `\\EFI\\Microsoft\\Boot\\bootmgfw.efi` through the EFI filesystem layer and verifying the `MZ` signature.
+- opening `\\EFI\\Microsoft\\Boot\\bootmgfw.efi` through the EFI filesystem layer;
+- reading its `MZ` signature through that layer.
 
-This is the first step toward allowing Microsoft Boot Manager itself to request BCD and the rest of the Windows boot files through UEFI file protocols.
+### Stage 3.3 — BCD through EFI File Protocol ✅
+
+Stage 3.3 is now verified on real PS4 hardware.
+
+The loader opens the real Windows Boot Configuration Data file through the project's UEFI-style filesystem bridge:
+
+```text
+\\EFI\\Microsoft\\Boot\\BCD
+```
+
+Confirmed:
+
+- Simple File System discovery;
+- volume open;
+- BCD open through `EFI_FILE_PROTOCOL`;
+- BCD read through the EFI bridge;
+- validation of the registry-hive `regf` header;
+- seek / rewind semantics;
+- clean handle close.
+
+Real-hardware success sequence:
+
+```text
+PS4 Windows Loader: Stage 3.3 started
+Stage 3.3: EFI filesystem bridge constructed
+Stage 3.3: LocateProtocol(SimpleFS) OK
+Stage 3.3: OpenVolume OK
+Stage 3.3: EFI File Open BCD OK
+Stage 3.3: BCD registry hive header regf OK
+Stage 3.3: BCD seek/rewind OK
+Stage 3.3: BCD Close OK
+PS4 Windows Loader: Stage 3.3 BCD EFI read self-test OK
+```
+
+This proves that the compatibility layer can now reach both the Microsoft EFI executable and its real BCD data through UEFI-style file APIs. **Microsoft Boot Manager itself has not been entered yet.**
 
 ---
 
@@ -193,16 +218,10 @@ PS4 payload entry                         ✅
 Read bootmgfw.efi from USB                ✅
         │
         ▼
-Validate PE32+ / AMD64 / EFI              ✅
+Validate / map / relocate PE32+ image     ✅
         │
         ▼
-Map PE sections + x64 relocations         ✅
-        │
-        ▼
-Build EFI System Table                    ✅
-        │
-        ▼
-Validate Microsoft x64 EFI ABI            ✅
+Build EFI System Table + x64 ABI          ✅
         │
         ▼
 Core EFI Boot Services                    ✅
@@ -211,13 +230,19 @@ Core EFI Boot Services                    ✅
 LoadedImage / DevicePath / SimpleFS       ✅
         │
         ▼
-EFI File Protocol bridge                  🚧
+EFI File Protocol bridge                  ✅
+        │
+        ▼
+Read real Windows BCD via EFI             ✅
+        │
+        ▼
+Complete services needed by bootmgfw      🚧
         │
         ▼
 Enter bootmgfw.efi                         ⏳
         │
         ▼
-Windows Boot Manager                      ⏳
+Windows Boot Manager consumes BCD         ⏳
         │
         ▼
 winload.efi                               ⏳
@@ -246,30 +271,38 @@ ntoskrnl.exe                              ⏳
 - [x] verified on real PS4 hardware
 
 ### Stage 3 — EFI compatibility layer 🚧
-- [x] minimal System Table
+- [x] EFI System Table
 - [x] console/output shim
 - [x] Microsoft x64 ABI path
 - [x] executable `bootmgfw.efi` mapping
-- [x] memory map service
+- [x] initial memory map service
 - [x] `AllocatePages` / `FreePages`
 - [x] `AllocatePool` / `FreePool`
 - [x] `HandleProtocol`
 - [x] `LocateProtocol`
 - [x] Loaded Image protocol
 - [x] Device Path protocol
-- [x] Simple File System protocol publication
-- [ ] EFI File Protocol bridge — Stage 3.2
-- [ ] `OpenProtocol`
-- [ ] `LocateHandleBuffer` / protocol enumeration
-- [ ] Block I/O protocol
+- [x] Simple File System protocol
+- [x] EFI File Protocol bridge
+- [x] BCD open/read/seek through EFI File Protocol
+- [ ] `GetInfo` / file metadata
+- [ ] directory enumeration
+- [ ] `OpenProtocol` / `CloseProtocol`
+- [ ] `LocateHandle` / `LocateHandleBuffer`
+- [ ] `ProtocolsPerHandle`
+- [ ] CRC / CopyMem / SetMem / Stall
+- [ ] minimal event/timer support
+- [ ] Runtime Services stubs/semantics
+- [ ] more accurate memory map + MapKey tracking
+- [ ] Block I/O protocol if required
 - [ ] ACPI configuration table
 - [ ] GOP-compatible framebuffer description
 
 ### Stage 4 — Windows Boot Manager
 - [ ] first controlled transfer to `bootmgfw.efi`
-- [ ] trace first missing EFI service/protocol
-- [ ] satisfy Boot Manager protocol dependencies
-- [ ] BCD access
+- [ ] trace EFI calls made by Microsoft Boot Manager
+- [ ] implement missing services/protocols as encountered
+- [ ] Boot Manager successfully reads BCD
 - [ ] reach `winload.efi`
 
 ### Stage 5 — Windows kernel
@@ -314,10 +347,11 @@ PS4-Windows-Loader/
 │   ├── stage2*.c
 │   ├── stage3.c
 │   ├── stage3_1.c
-│   └── stage3_2.c         # current development payload
+│   ├── stage3_2.c
+│   └── stage3_3.c         # latest hardware-verified stage
 ├── loader/
-│   ├── include/           # shared loader interfaces
-│   └── src/               # portable PE/boot core
+│   ├── include/
+│   └── src/
 ├── drivers/               # future Windows drivers
 ├── docs/
 │   └── BOOT_FLOW.md
@@ -332,7 +366,7 @@ PS4-Windows-Loader/
 
 GitHub Actions builds the current development payload on every push.
 
-To avoid confusion during hardware testing, the workflow publishes **one current artifact only**:
+To avoid confusion during hardware testing, each new workflow run publishes **one current artifact only**:
 
 ```text
 PS4-Windows-Loader-Latest
@@ -348,32 +382,38 @@ PS4_RUNTIME_COMMIT.txt
 STAGE.txt
 ```
 
-`STAGE.txt` identifies which source stage produced the current `latest` payload.
+`STAGE.txt` identifies which source stage produced the current payload.
 
 The PS4 payload runtime dependency is pinned to a known public `ps4-linux-loader` commit so builds remain reproducible.
 
-> The current payload is still experimental firmware/boot research code. A successful build does **not** mean Windows is bootable yet.
+> A successful payload build does **not** mean Windows is bootable yet.
 
 ---
 
-## 💿 Preparing the current USB test file
+## 💿 Current USB test layout
 
-Current Stage 2/3 development expects:
-
-```text
-/mnt/usb0/EFI/Microsoft/Boot/bootmgfw.efi
-```
-
-On a FAT32 USB drive this corresponds to:
+Current development uses Windows boot files supplied by the tester from their own legitimate Windows installation/media:
 
 ```text
 EFI/
 └── Microsoft/
     └── Boot/
-        └── bootmgfw.efi
+        ├── bootmgfw.efi
+        ├── BCD
+        ├── bootmgr.efi
+        ├── memtest.efi
+        ├── Fonts/
+        ├── Resources/
+        └── ...
 ```
 
-The Microsoft file must come from the tester's own legitimate Windows installation or installation media. It is not included in this repository.
+On PS4 this is currently reached under:
+
+```text
+/mnt/usb0/EFI/Microsoft/Boot/
+```
+
+Microsoft files are **not** included in this repository.
 
 ---
 
@@ -389,7 +429,7 @@ Microsoft files stay outside this repository.
 
 ## 🧠 Engineering approach
 
-The project deliberately separates several hard problems:
+The project deliberately separates the difficult layers:
 
 1. **PS4 payload execution and hardware handoff**
 2. **PE/COFF loading**
@@ -398,7 +438,7 @@ The project deliberately separates several hard problems:
 5. **Windows platform drivers**
 6. **Liverpool graphics / WDDM**
 
-Every stage has a concrete real-hardware success condition. This makes failures attributable to a specific layer instead of treating "Windows did not boot" as one giant unknown.
+Every stage has a concrete real-hardware success condition so failures can be attributed to a specific layer.
 
 Detailed architecture: [`docs/BOOT_FLOW.md`](docs/BOOT_FLOW.md).
 
@@ -406,9 +446,7 @@ Detailed architecture: [`docs/BOOT_FLOW.md`](docs/BOOT_FLOW.md).
 
 ## ⚠️ Experimental status
 
-This project is early-stage low-level boot research.
-
-Expect crashes, hangs, incomplete hardware support and frequent binary/interface changes between stages. Use dedicated external test media and keep backups of anything important.
+This project is early-stage low-level boot research. Expect crashes, hangs, incomplete hardware support and frequent binary/interface changes between stages. Use dedicated external test media and keep backups of anything important.
 
 ---
 
