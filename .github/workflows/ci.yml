@@ -17,35 +17,24 @@ jobs:
   stage0-core:
     name: Build Stage 0 portable core
     runs-on: ubuntu-24.04
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install compiler
         run: |
           sudo apt-get update
           sudo apt-get install -y clang llvm lld
-
       - name: Compile loader core
         run: |
           mkdir -p build
-          clang \
-            -std=c11 \
-            -Wall -Wextra -Wpedantic -Werror \
-            -ffreestanding \
-            -fno-stack-protector \
-            -fno-builtin \
-            -Iloader/include \
-            -c loader/src/main.c \
-            -o build/ps4wl-main.o
-
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -ffreestanding -fno-stack-protector -fno-builtin \
+            -Iloader/include -c loader/src/main.c -o build/ps4wl-main.o
       - name: Inspect object
         run: |
           file build/ps4wl-main.o
           llvm-readelf -h build/ps4wl-main.o
           llvm-nm -g build/ps4wl-main.o
-
       - name: Upload Stage 0 object
         uses: actions/upload-artifact@v4
         with:
@@ -56,84 +45,56 @@ jobs:
   ps4-payloads:
     name: Build PS4 payloads
     runs-on: ubuntu-24.04
-
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-
       - name: Install PS4 payload toolchain dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential binutils git python3 yasm
-
       - name: Fetch pinned PS4 payload runtime
         run: |
           git clone https://github.com/ps4-linux/ps4-linux-loader.git ps4-runtime
           git -C ps4-runtime checkout "$PS4_LOADER_COMMIT"
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
-
       - name: Build PS4 freestanding runtime
-        run: |
-          make -C ps4-runtime/lib
+        run: make -C ps4-runtime/lib
 
-      - name: Link Stage 1 payload ELF
+      - name: Link payload ELFs
         run: |
-          mkdir -p build/stage1
-          gcc \
-            -isystem ps4-runtime/freebsd-headers \
-            -nostdinc -nostdlib \
-            -fno-stack-protector \
-            -fno-builtin \
-            -static -fPIE -ffreestanding \
-            ps4-runtime/lib/lib.a \
-            payload/stage1.c \
-            -Wl,-gc-sections \
-            -o build/stage1/PS4WindowsLoader-stage1.elf
-
-      - name: Link Stage 2 payload ELF
-        run: |
-          mkdir -p build/stage2
-          gcc \
-            -isystem ps4-runtime/freebsd-headers \
-            -nostdinc -nostdlib \
-            -fno-stack-protector \
-            -fno-builtin \
-            -static -fPIE -ffreestanding \
-            ps4-runtime/lib/lib.a \
-            payload/stage2.c \
-            -Wl,-gc-sections \
-            -o build/stage2/PS4WindowsLoader-stage2.elf
+          for stage in stage1 stage2 stage2_2; do
+            mkdir -p "build/$stage"
+            src="payload/$stage.c"
+            out="build/$stage/PS4WindowsLoader-$stage.elf"
+            gcc \
+              -isystem ps4-runtime/freebsd-headers \
+              -nostdinc -nostdlib \
+              -fno-stack-protector -fno-builtin \
+              -static -fPIE -ffreestanding \
+              ps4-runtime/lib/lib.a "$src" \
+              -Wl,-gc-sections -o "$out"
+          done
 
       - name: Convert ELFs to PS4 payload BINs
         run: |
-          objcopy build/stage1/PS4WindowsLoader-stage1.elf \
-            --only-section .text \
-            --only-section .data \
-            --only-section .bss \
-            --only-section .rodata \
-            -O binary \
-            build/stage1/PS4WindowsLoader-stage1.bin
-
-          objcopy build/stage2/PS4WindowsLoader-stage2.elf \
-            --only-section .text \
-            --only-section .data \
-            --only-section .bss \
-            --only-section .rodata \
-            -O binary \
-            build/stage2/PS4WindowsLoader-stage2.bin
+          for stage in stage1 stage2 stage2_2; do
+            objcopy "build/$stage/PS4WindowsLoader-$stage.elf" \
+              --only-section .text \
+              --only-section .data \
+              --only-section .bss \
+              --only-section .rodata \
+              -O binary "build/$stage/PS4WindowsLoader-$stage.bin"
+          done
 
       - name: Inspect payloads
         run: |
-          file build/stage1/PS4WindowsLoader-stage1.elf
-          file build/stage2/PS4WindowsLoader-stage2.elf
-          readelf -h build/stage1/PS4WindowsLoader-stage1.elf
-          readelf -h build/stage2/PS4WindowsLoader-stage2.elf
-          ls -lh build/stage1/PS4WindowsLoader-stage1.*
-          ls -lh build/stage2/PS4WindowsLoader-stage2.*
-          sha256sum build/stage1/PS4WindowsLoader-stage1.bin | tee build/stage1/SHA256SUMS.txt
-          sha256sum build/stage2/PS4WindowsLoader-stage2.bin | tee build/stage2/SHA256SUMS.txt
-          cp PS4_RUNTIME_COMMIT.txt build/stage1/
-          cp PS4_RUNTIME_COMMIT.txt build/stage2/
+          for stage in stage1 stage2 stage2_2; do
+            file "build/$stage/PS4WindowsLoader-$stage.elf"
+            readelf -h "build/$stage/PS4WindowsLoader-$stage.elf"
+            ls -lh "build/$stage/PS4WindowsLoader-$stage."*
+            sha256sum "build/$stage/PS4WindowsLoader-$stage.bin" | tee "build/$stage/SHA256SUMS.txt"
+            cp PS4_RUNTIME_COMMIT.txt "build/$stage/"
+          done
 
       - name: Upload Stage 1 payload
         uses: actions/upload-artifact@v4
@@ -147,4 +108,11 @@ jobs:
         with:
           name: PS4-Windows-Loader-Stage2
           path: build/stage2/
+          retention-days: 30
+
+      - name: Upload Stage 2.2 payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Stage2.2
+          path: build/stage2_2/
           retention-days: 30
