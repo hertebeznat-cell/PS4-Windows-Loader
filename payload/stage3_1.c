@@ -67,7 +67,13 @@ static const EFI_GUID loaded_guid31={0x5b1b31a1U,0x9562U,0x11d2U,{0x8e,0x3f,0x00
 static const EFI_GUID device_path_guid31={0x09576e91U,0x6d3fU,0x11d2U,{0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 static const EFI_GUID simple_fs_guid31={0x964e5b22U,0x6459U,0x11d2U,{0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 
-static int guid_eq31(const EFI_GUID *a,const EFI_GUID *b){ return a&&b&&mem_eq(a,b,sizeof(EFI_GUID)); }
+static int guid_eq31(const EFI_GUID *a,const EFI_GUID *b)
+{
+    const u8 *x=(const u8*)a,*y=(const u8*)b;size_t i;
+    if(!a||!b)return 0;
+    for(i=0;i<sizeof(EFI_GUID);i++)if(x[i]!=y[i])return 0;
+    return 1;
+}
 
 struct pool_header31 { u64 magic,size; };
 #define POOL_MAGIC31 0x31334c4f4f505350ULL
