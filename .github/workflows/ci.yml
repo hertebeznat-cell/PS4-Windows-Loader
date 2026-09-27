@@ -53,8 +53,8 @@ jobs:
           path: build/ps4wl-main.o
           retention-days: 30
 
-  stage1-payload:
-    name: Build Stage 1 PS4 payload
+  ps4-payloads:
+    name: Build PS4 payloads
     runs-on: ubuntu-24.04
 
     steps:
@@ -90,7 +90,21 @@ jobs:
             -Wl,-gc-sections \
             -o build/stage1/PS4WindowsLoader-stage1.elf
 
-      - name: Convert ELF to PS4 payload BIN
+      - name: Link Stage 2 payload ELF
+        run: |
+          mkdir -p build/stage2
+          gcc \
+            -isystem ps4-runtime/freebsd-headers \
+            -nostdinc -nostdlib \
+            -fno-stack-protector \
+            -fno-builtin \
+            -static -fPIE -ffreestanding \
+            ps4-runtime/lib/lib.a \
+            payload/stage2.c \
+            -Wl,-gc-sections \
+            -o build/stage2/PS4WindowsLoader-stage2.elf
+
+      - name: Convert ELFs to PS4 payload BINs
         run: |
           objcopy build/stage1/PS4WindowsLoader-stage1.elf \
             --only-section .text \
@@ -100,17 +114,37 @@ jobs:
             -O binary \
             build/stage1/PS4WindowsLoader-stage1.bin
 
-      - name: Inspect payload
+          objcopy build/stage2/PS4WindowsLoader-stage2.elf \
+            --only-section .text \
+            --only-section .data \
+            --only-section .bss \
+            --only-section .rodata \
+            -O binary \
+            build/stage2/PS4WindowsLoader-stage2.bin
+
+      - name: Inspect payloads
         run: |
           file build/stage1/PS4WindowsLoader-stage1.elf
+          file build/stage2/PS4WindowsLoader-stage2.elf
           readelf -h build/stage1/PS4WindowsLoader-stage1.elf
+          readelf -h build/stage2/PS4WindowsLoader-stage2.elf
           ls -lh build/stage1/PS4WindowsLoader-stage1.*
+          ls -lh build/stage2/PS4WindowsLoader-stage2.*
           sha256sum build/stage1/PS4WindowsLoader-stage1.bin | tee build/stage1/SHA256SUMS.txt
+          sha256sum build/stage2/PS4WindowsLoader-stage2.bin | tee build/stage2/SHA256SUMS.txt
           cp PS4_RUNTIME_COMMIT.txt build/stage1/
+          cp PS4_RUNTIME_COMMIT.txt build/stage2/
 
       - name: Upload Stage 1 payload
         uses: actions/upload-artifact@v4
         with:
           name: PS4-Windows-Loader-Stage1
           path: build/stage1/
+          retention-days: 30
+
+      - name: Upload Stage 2 payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Stage2
+          path: build/stage2/
           retention-days: 30
