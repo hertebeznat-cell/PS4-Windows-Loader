@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PS4_LOADER_COMMIT: f70f43a60a973b3662daeb29c1f115d95408db93
+
 jobs:
   stage0-core:
     name: Build Stage 0 portable core
@@ -48,4 +51,66 @@ jobs:
         with:
           name: PS4-Windows-Loader-Stage0
           path: build/ps4wl-main.o
+          retention-days: 30
+
+  stage1-payload:
+    name: Build Stage 1 PS4 payload
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install PS4 payload toolchain dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential binutils git python3 yasm
+
+      - name: Fetch pinned PS4 payload runtime
+        run: |
+          git clone https://github.com/ps4-linux/ps4-linux-loader.git ps4-runtime
+          git -C ps4-runtime checkout "$PS4_LOADER_COMMIT"
+          git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
+
+      - name: Build PS4 freestanding runtime
+        run: |
+          make -C ps4-runtime/lib
+
+      - name: Link Stage 1 payload ELF
+        run: |
+          mkdir -p build/stage1
+          gcc \
+            -isystem ps4-runtime/freebsd-headers \
+            -nostdinc -nostdlib \
+            -fno-stack-protector \
+            -fno-builtin \
+            -static -fPIE -ffreestanding \
+            ps4-runtime/lib/lib.a \
+            payload/stage1.c \
+            -Wl,-gc-sections \
+            -o build/stage1/PS4WindowsLoader-stage1.elf
+
+      - name: Convert ELF to PS4 payload BIN
+        run: |
+          objcopy build/stage1/PS4WindowsLoader-stage1.elf \
+            --only-section .text \
+            --only-section .data \
+            --only-section .bss \
+            --only-section .rodata \
+            -O binary \
+            build/stage1/PS4WindowsLoader-stage1.bin
+
+      - name: Inspect payload
+        run: |
+          file build/stage1/PS4WindowsLoader-stage1.elf
+          readelf -h build/stage1/PS4WindowsLoader-stage1.elf
+          ls -lh build/stage1/PS4WindowsLoader-stage1.*
+          sha256sum build/stage1/PS4WindowsLoader-stage1.bin | tee build/stage1/SHA256SUMS.txt
+          cp PS4_RUNTIME_COMMIT.txt build/stage1/
+
+      - name: Upload Stage 1 payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Stage1
+          path: build/stage1/
           retention-days: 30
