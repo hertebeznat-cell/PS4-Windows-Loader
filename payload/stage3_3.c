@@ -1,6 +1,5 @@
-#define main stage3_2_base_main
+#define STAGE3_2_NO_MAIN 1
 #include "stage3_2.c"
-#undef main
 
 int main(void)
 {
