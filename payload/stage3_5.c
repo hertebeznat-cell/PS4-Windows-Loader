@@ -232,6 +232,7 @@ static void install_stage35_services(void)
     g_system_table.RuntimeServices=&rt35;g_system_table.BootServices=&bs32;g_system_table.Hdr.CRC32=0;g_system_table.Hdr.CRC32=crc32_bytes(&g_system_table,g_system_table.Hdr.HeaderSize);
 }
 
+#ifndef STAGE3_5_NO_MAIN
 int main(void)
 {
     create_event35_fn create_event;signal_event35_fn signal_event;check_event35_fn check_event;wait_for_event35_fn wait_event;close_event35_fn close_event;exit_boot_services35_fn exit_bs;
@@ -268,3 +269,4 @@ int main(void)
     notify("PS4 Windows Loader: Stage 3.5 pre-entry firmware self-test OK");
     munmap(arena32,16U*1024U*1024U);return 0;
 }
+#endif
