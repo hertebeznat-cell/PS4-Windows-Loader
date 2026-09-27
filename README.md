@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-3.6%20final%20pre--entry%20preflight-blueviolet)
+![Stage](https://img.shields.io/badge/stage-4.0%20bootmgfw%20entry%20probe-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -186,8 +186,6 @@ PS4 Windows Loader: Stage 3.4 pre-bootmgr services self-test OK
 
 ## Stage 3.5 — event/runtime/MapKey firmware layer ✅
 
-Stage 3.5 is **hardware-verified**.
-
 Confirmed:
 
 - `RaiseTPL` / `RestoreTPL`;
@@ -212,28 +210,51 @@ Stage 3.5: ExitBootServices MapKey validation OK
 PS4 Windows Loader: Stage 3.5 pre-entry firmware self-test OK
 ```
 
-## Stage 3.6 — final pre-entry Boot Manager preflight 🚧
+## Stage 3.6 — final pre-entry Boot Manager preflight ✅
 
-Current development stage. Stage 3.6 intentionally still **does not execute Microsoft `bootmgfw.efi`**.
+Stage 3.6 is **hardware-verified** and still intentionally does not execute Microsoft code.
 
-The final dry-run adds and tests:
+Confirmed:
 
 - tracked EFI page/pool allocations in `GetMemoryMap`;
-- a larger conventional-memory arena for firmware testing;
-- `LocateHandle`;
-- `LocateDevicePath`;
+- larger conventional-memory test arena;
+- `LocateHandle` / `LocateDevicePath`;
 - tracked `LocateHandleBuffer` / `ProtocolsPerHandle` allocations;
 - `OpenProtocolInformation` fallback semantics;
 - `RegisterProtocolNotify` plumbing;
 - `InstallConfigurationTable` add/remove semantics;
-- non-null typed fallbacks for additional Boot Services such as protocol installation, image loading and controller services;
-- corrected PE section-copy semantics without clamping raw data to `VirtualSize`;
-- loading `bootmgfw.efi` into an EFI LoaderCode allocation represented in the memory map;
+- additional non-null Boot Services fallbacks;
+- corrected PE section-copy semantics;
+- `bootmgfw.efi` mapped as `EFI_LOADER_CODE` and represented in the memory map;
 - complete `EFI_LOADED_IMAGE_PROTOCOL` image base/size metadata;
-- a real Media FilePath device-path node for `\\EFI\\Microsoft\\Boot\\bootmgfw.efi`;
-- final calculation of the Microsoft EFI entry address.
+- Media FilePath node for `\\EFI\\Microsoft\\Boot\\bootmgfw.efi`;
+- final Microsoft EFI entry-point preflight.
 
-If Stage 3.6 passes on hardware, the next milestone is the **first controlled call into Microsoft Boot Manager code**.
+```text
+PS4 Windows Loader: Stage 3.6 started
+Stage 3.6: Stage 3.5 firmware + extended Boot Services installed
+Stage 3.6: tracked EFI allocation memory map OK
+Stage 3.6: protocol discovery extensions OK
+Stage 3.6: ConfigurationTable semantics OK
+Stage 3.6: corrected bootmgfw PE mapping + memory descriptor OK
+Stage 3.6: LoadedImage bootmgfw metadata + FilePath OK
+Stage 3.6: bootmgfw entry preflight ready - Microsoft code NOT called yet
+PS4 Windows Loader: Stage 3.6 final pre-entry self-test OK
+```
+
+## Stage 4.0 — first real Microsoft Boot Manager entry 🚧
+
+Current development stage. Stage 4.0 performs the project's first actual call to the mapped Microsoft EFI entry point:
+
+```text
+bootmgfw_entry(ImageHandle, SystemTable)
+```
+
+Before entry it adds a minimal text-input environment, non-null text-output methods, a basic successful `GetTime`, tracked allocations and low-volume EFI call tracing. The goal of this stage is not to reach the Windows desktop in one attempt: it is to prove that Microsoft code executes and identify the next missing EFI service/protocol from the last trace or returned `EFI_STATUS`.
+
+Expected early traces include calls such as `HandleProtocol`, `OpenProtocol`, `LocateProtocol`, `GetVariable`, `GetMemoryMap`, file access, and potentially an unsupported `LoadImage` once Boot Manager tries to move deeper into the Windows boot chain.
+
+> Stage 4.0 can legitimately hang or crash the console. A hang after the `ENTERING Microsoft bootmgfw.efi NOW` message is still useful data if the last trace message is reported.
 
 ---
 
@@ -260,9 +281,9 @@ Metadata / protocol helpers               ✅
         ↓
 Runtime / events / MapKey hardening       ✅
         ↓
-Final Boot Manager entry preflight        🚧
+Final Boot Manager entry preflight        ✅
         ↓
-First controlled bootmgfw.efi entry       ⏳
+First controlled bootmgfw.efi entry       🚧
         ↓
 Windows Boot Manager                      ⏳
         ↓
@@ -293,14 +314,14 @@ ntoskrnl.exe                              ⏳
 - [x] events / timers baseline
 - [x] Runtime Services baseline
 - [x] `ExitBootServices` MapKey validation
-- [ ] Stage 3.6 hardware verification
+- [x] final Stage 3.6 pre-entry hardware verification
 - [ ] directory enumeration as required
 - [ ] fuller timer semantics as required
 - [ ] real platform/physical memory description for Windows handoff
 - [ ] additional protocols requested by Boot Manager
 
 ### Windows Boot Manager
-- [ ] first controlled call to `bootmgfw.efi`
+- [ ] Stage 4.0 first controlled `bootmgfw.efi` entry hardware test
 - [ ] trace EFI service/protocol calls
 - [ ] implement missing dependencies as encountered
 - [ ] Boot Manager consumes BCD
@@ -338,7 +359,8 @@ PS4-Windows-Loader/
 │   ├── stage3_3.c
 │   ├── stage3_4.c         # hardware verified
 │   ├── stage3_5.c         # hardware verified
-│   └── stage3_6.c         # current development payload
+│   ├── stage3_6.c         # hardware verified
+│   └── stage4_0.c         # current Microsoft entry probe
 ├── loader/
 │   ├── include/
 │   └── src/
