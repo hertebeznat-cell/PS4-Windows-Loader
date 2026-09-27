@@ -5,24 +5,23 @@
 ### Bare-metal Windows boot research for PlayStation 4
 
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
-**Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — no Linux host, no QEMU, no virtualization.
+**Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Status](https://img.shields.io/badge/status-early%20research-orange)
+![Stage](https://img.shields.io/badge/stage-1%20payload-blueviolet)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
+![CI](https://img.shields.io/github/actions/workflow/status/hertebeznat-cell/PS4-Windows-Loader/ci.yml?label=payload%20build)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
 ---
 
-## What is this?
+## 🚀 What is PS4 Windows Loader?
 
-**PS4 Windows Loader** is an experimental open-source project exploring whether modern Windows can be booted **directly on PlayStation 4 hardware**.
+**PS4 Windows Loader** is an experimental open-source project exploring a real **bare-metal Windows boot path on PlayStation 4 hardware**.
 
-The project is not a Windows distribution and does **not** include Microsoft binaries, ISO images, product keys, firmware dumps, Sony proprietary code, or copyrighted drivers.
-
-The intended design is:
+The long-term target is:
 
 ```text
 PS4 jailbreak / payload entry
@@ -30,12 +29,12 @@ PS4 jailbreak / payload entry
           ▼
 PS4 Windows Loader
           │
-          ├─ hardware handoff / reset
-          ├─ memory map
-          ├─ ACPI compatibility tables
-          ├─ framebuffer handoff
-          ├─ storage / USB bootstrap
-          └─ UEFI-like runtime services needed for boot
+          ├── PS4 hardware handoff
+          ├── memory map
+          ├── ACPI tables
+          ├── framebuffer
+          ├── storage / USB bootstrap
+          └── minimal UEFI-compatible environment
           │
           ▼
 Microsoft bootmgfw.efi
@@ -50,141 +49,210 @@ Windows kernel
 PS4-specific Windows drivers
 ```
 
-## 🎯 First hardware target
+This is **not** Windows running inside Linux and it is **not** a virtual machine.
 
-Initial development is intentionally narrow:
+The repository does not contain Windows ISOs, product keys, Microsoft binaries, Sony firmware dumps, leaked material, or proprietary drivers.
+
+---
+
+## 🎮 First hardware target
 
 | Component | Initial target |
 |---|---|
-| Console | PS4 Slim CUH-2208B |
-| Southbridge/platform | Baikal |
+| Console | **PS4 Slim CUH-2208B** |
+| Southbridge | **Baikal** |
 | CPU | AMD Jaguar x86-64 |
 | GPU | AMD Liverpool |
-| Firmware used for testing | 13.52 |
-| Display | HDMI framebuffer first |
-| OS targets | Windows 11 / Windows Server 2025 |
+| Test firmware | **13.52** |
+| Display target | HDMI framebuffer first |
+| Windows targets | Windows 11 / Windows Server 2025 |
 
-Other PS4 revisions can be added only after the first platform reaches reliable boot milestones.
+Development is intentionally focused on one known machine before expanding to Aeolia, Belize, Belize2, PS4 Pro, and other revisions.
 
-## 🚦 Development stages
+---
 
-### Stage 0 — project foundation ✅
-- repository structure
-- boot architecture documentation
-- payload entry skeleton
-- PE/COFF loader interfaces
-- CI compile checks
+## ✅ Current progress
 
-### Stage 1 — Windows Boot Manager
-- initialize a known PS4 hardware state
-- locate a FAT/EFI volume on USB storage
-- parse PE/COFF images
-- load `\\EFI\\Microsoft\\Boot\\bootmgfw.efi`
-- provide enough firmware-style services to reach Microsoft Boot Manager
+### Stage 0 — foundation ✅
 
-**Success criterion:** Windows Boot Manager or the first Windows boot screen appears on the PS4 display.
+- project architecture
+- portable loader core
+- PE/COFF parser
+- CI compile validation
+- boot-flow documentation
 
-### Stage 2 — Windows kernel handoff
-- memory map compatible with Windows loader expectations
-- ACPI tables
-- interrupt/timer setup
-- framebuffer description
-- boot-device path
-- reach `winload.efi` and Windows kernel initialization
+### Stage 1 — real PS4 payload 🚧
 
-### Stage 3 — installable Windows
-- storage driver
-- USB input
-- basic display driver
-- Windows Setup reaches disk selection and installation
+CI now builds a real freestanding PS4 payload:
 
-### Stage 4 — usable desktop/server
-- Ethernet / Wi-Fi
-- audio
-- Bluetooth
-- DualShock HID
-- power management
+```text
+PS4WindowsLoader-stage1.bin
+```
 
-### Stage 5 — accelerated Liverpool graphics
-- WDDM kernel-mode display driver
-- user-mode graphics path
-- hardware acceleration
+The Stage 1 payload:
 
-This is expected to be the largest driver sub-project.
+- executes as a PS4 payload;
+- emits visible PS4 system notifications;
+- scans `/mnt/usb0` and `/mnt/usb1`;
+- looks for `EFI/Microsoft/Boot/bootmgfw.efi` and `EFI/Boot/bootx64.efi`;
+- validates PE/COFF, AMD64, PE32+, and EFI Application headers;
+- reports whether a valid Windows EFI loader was found.
+
+**Stage 1 does not transfer control to Windows yet.** Its purpose is to prove the PS4 payload path and Windows EFI discovery before we introduce firmware handoff code.
+
+See [`docs/STAGE1.md`](docs/STAGE1.md).
+
+---
+
+## 🗺️ Roadmap
+
+### Stage 1 — Windows EFI discovery 🚧
+- [x] real PS4 payload build
+- [x] USB mount probing
+- [x] x64 PE32+ EFI validation
+- [ ] map complete PE sections
+- [ ] relocation engine
+- [ ] EFI image context
+
+### Stage 2 — EFI compatibility layer
+- [ ] EFI System Table
+- [ ] minimal Boot Services
+- [ ] memory descriptors
+- [ ] Loaded Image protocol
+- [ ] device paths
+- [ ] filesystem bridge
+- [ ] ACPI configuration table
+- [ ] framebuffer/GOP-compatible description
+
+### Stage 3 — Windows Boot Manager
+- [ ] load `bootmgfw.efi`
+- [ ] satisfy required EFI protocols
+- [ ] enter Microsoft Boot Manager
+- [ ] load BCD
+- [ ] reach `winload.efi`
+
+### Stage 4 — Windows kernel
+- [ ] Windows-compatible memory handoff
+- [ ] interrupt/timer bring-up
+- [ ] ACPI platform description
+- [ ] reach `ntoskrnl.exe`
+
+### Stage 5 — installable Windows
+- [ ] storage driver
+- [ ] USB keyboard/mouse
+- [ ] basic display driver
+- [ ] Windows Setup disk selection
+- [ ] installation to external/internal target
+
+### Stage 6 — usable system
+- [ ] Ethernet / Wi-Fi
+- [ ] audio
+- [ ] Bluetooth
+- [ ] DualShock HID
+- [ ] power management
+
+### Stage 7 — Liverpool acceleration
+- [ ] WDDM kernel-mode display driver
+- [ ] Windows user-mode graphics path
+- [ ] hardware-accelerated desktop
+- [ ] DirectX bring-up
+
+Liverpool/WDDM is expected to be the largest driver sub-project.
+
+---
 
 ## 📁 Repository layout
 
 ```text
 PS4-Windows-Loader/
+├── payload/
+│   └── stage1.c           # current PS4-executable probe payload
 ├── loader/
-│   ├── include/          # loader interfaces
-│   └── src/              # Stage 0/1 loader code
-├── drivers/              # future Windows drivers
+│   ├── include/           # loader interfaces
+│   └── src/               # portable PE/boot core
+├── drivers/               # future Windows drivers
 ├── docs/
-│   └── BOOT_FLOW.md      # architecture and milestone notes
-├── setup/                # future ISO/driver injection tooling
-└── .github/workflows/    # CI
+│   ├── BOOT_FLOW.md
+│   └── STAGE1.md
+├── setup/                 # future ISO/driver injection tools
+└── .github/workflows/
+    └── ci.yml             # reproducible payload builds
 ```
 
-## 🧩 Windows image policy
+---
 
-This repository will **never ship a modified Windows ISO**.
+## 🔨 Builds
 
-A future setup builder may accept a user's own legitimate Microsoft Windows 11 / Windows Server 2025 ISO and inject this project's open-source drivers and configuration into a locally generated test image.
+Every push is built by GitHub Actions.
 
-## ⚠️ Current status
+The Stage 1 artifact contains:
 
-This is **early research**, not a working Windows boot solution yet.
-
-At the moment the repository contains the Stage 0 loader architecture and compileable interfaces. Do not expect the current output to boot Windows on a PS4 yet.
-
-## 🛠️ Building the Stage 0 code
-
-The CI currently verifies that the portable loader core compiles cleanly. A real PS4 payload build will be added after the hardware entry/handoff layer is selected and validated.
-
-Locally with Clang:
-
-```bash
-clang -std=c11 -Wall -Wextra -Werror \
-  -Iloader/include \
-  -c loader/src/main.c -o ps4wl-main.o
+```text
+PS4WindowsLoader-stage1.bin
+PS4WindowsLoader-stage1.elf
+SHA256SUMS.txt
+PS4_RUNTIME_COMMIT.txt
 ```
 
-## 🧠 Design principle
+The PS4 payload runtime dependency is pinned to a known public `ps4-linux-loader` commit so builds are reproducible.
 
-The project deliberately separates:
+> **Important:** the current `.bin` is a discovery/probe payload. It is not yet a Windows boot payload and should not be described as one.
 
-1. **PS4 hardware bring-up**
-2. **firmware/UEFI compatibility layer**
-3. **Microsoft PE/COFF boot chain**
-4. **Windows platform drivers**
+---
 
-That makes failures measurable instead of trying to jump straight from a PS4 payload into a full Windows desktop.
+## 💿 Windows media policy
 
-## 🤝 Contributing
+This repository will **never redistribute a modified Windows ISO**.
 
-Useful contributions include:
+A future builder may accept the user's own legitimate Windows 11 / Windows Server 2025 ISO and locally inject this project's open-source drivers, ACPI/platform data, and setup configuration.
 
-- PS4 Baikal PCI/device maps
-- ACPI research
-- PE/COFF loader work
+Microsoft files stay outside this repository.
+
+---
+
+## 🧠 Engineering approach
+
+The project separates four difficult problems instead of mixing them together:
+
+1. **PS4 payload + hardware control**
+2. **UEFI/firmware compatibility**
+3. **Microsoft boot chain**
+4. **Windows drivers for PS4 hardware**
+
+Each stage gets a measurable success condition, so failures can be debugged on real hardware instead of guessing whether the problem is the payload, EFI layer, Windows loader, or a device driver.
+
+Detailed architecture: [`docs/BOOT_FLOW.md`](docs/BOOT_FLOW.md).
+
+---
+
+## 🤝 Contributions
+
+Useful areas include:
+
+- Baikal PCI/device mapping
+- PS4 interrupt/timer research
+- ACPI generation
+- PE/COFF loading and relocations
 - EFI protocol implementation
-- storage and USB bring-up
-- Windows Driver Kit work
-- Liverpool display/GPU documentation
-- reproducible boot logs
+- USB/storage bring-up
+- Windows Driver Kit development
+- Liverpool display/GPU research
+- reproducible boot logs from real PS4 hardware
 
-Please keep proprietary Sony/Microsoft binaries and leaked material out of the repository.
+Please keep proprietary Sony/Microsoft code and leaked material out of the project.
+
+---
 
 ## 📜 License
 
-MIT. See `LICENSE`.
+MIT — see [`LICENSE`](LICENSE).
 
 ---
 
 <div align="center">
 
-**PS4 Windows Loader**  
-*From payload to Windows Boot Manager — one milestone at a time.*
+### PS4 Windows Loader
+
+**From a PS4 payload to Windows Boot Manager — one verified milestone at a time.**
 
 </div>
