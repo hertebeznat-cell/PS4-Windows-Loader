@@ -7,7 +7,7 @@
 **Target:** PS4 Slim CUH-2208B · Baikal · x86-64  
 **Goal:** Windows 11 / Windows Server 2025 directly on PS4 hardware — **no Linux host, no QEMU, no virtualization**.
 
-![Stage](https://img.shields.io/badge/stage-3%20EFI%20shim-blueviolet)
+![Stage](https://img.shields.io/badge/stage-3.1%20Boot%20Services-blueviolet)
 ![Hardware](https://img.shields.io/badge/real%20hardware-verified-success)
 ![Target](https://img.shields.io/badge/target-PS4%20Baikal-blue)
 ![Architecture](https://img.shields.io/badge/arch-x86__64-lightgrey)
@@ -90,8 +90,6 @@ Confirmed:
 
 ### Stage 2.5 — Windows EFI image loader ✅
 
-This is the current major verified milestone.
-
 The loader successfully:
 
 - opens `/mnt/usb0/EFI/Microsoft/Boot/bootmgfw.efi`;
@@ -114,21 +112,49 @@ Stage 2.5: sections mapped OK
 PS4 Windows Loader: Stage 2.5 PE map + relocations OK
 ```
 
-At this point, Microsoft's `bootmgfw.efi` is **loaded, mapped and relocated in PS4 memory**. Control has not yet been transferred to it.
+### Stage 3 — EFI System Table + x64 ABI ✅
 
-### Stage 3 — minimal EFI environment 🚧
+Stage 3 has now also been verified on real PS4 hardware.
 
-Current development is building the firmware environment required before safely entering Microsoft Boot Manager.
+Confirmed:
 
-Stage 3 introduces:
+- minimal `EFI_SYSTEM_TABLE` construction;
+- correct EFI System Table signature;
+- EFI console `OutputString` callback path;
+- Microsoft x64 / UEFI calling convention (`ms_abi`);
+- successful re-read and validation of `bootmgfw.efi`;
+- executable PE image mapping and relocations;
+- calculation of the real Microsoft Boot Manager entry point.
 
-- a minimal `EFI_SYSTEM_TABLE`;
-- console output plumbing;
-- Microsoft x64 / UEFI calling-convention tests;
-- an executable mapping for `bootmgfw.efi`;
-- validation that its entry point can be prepared for handoff.
+Real-hardware success sequence:
 
-The next milestone is not simply "jump to the entry point". Windows Boot Manager expects real UEFI services and protocols, so the compatibility layer must exist first.
+```text
+PS4 Windows Loader: Stage 3 started
+Stage 3: EFI SystemTable constructed
+Stage 3: SystemTable signature OK
+Stage 3 EFI OutputString OK
+Stage 3: Microsoft x64 EFI ABI test OK
+Stage 3: bootmgfw.efi read OK
+Stage 3: PE32+ EFI validation OK
+Stage 3: bootmgfw executable image ready
+```
+
+`bootmgfw.efi` is now prepared as executable code in PS4 memory, but its entry point is intentionally **not called yet**. The next work is implementing the UEFI Boot Services and protocols it expects.
+
+### Stage 3.1 — Boot Services 🚧
+
+Current development adds real callable UEFI-style services and protocol discovery. The first Stage 3.1 hardware test covers:
+
+- `AllocatePages` / `FreePages`;
+- `AllocatePool` / `FreePool`;
+- `GetMemoryMap` buffer semantics;
+- `HandleProtocol`;
+- `LocateProtocol`;
+- Loaded Image protocol;
+- Device Path protocol;
+- publication of Simple File System protocol.
+
+The following step will bridge `EFI_FILE_PROTOCOL` to the PS4 `/mnt/usb0` filesystem so Microsoft Boot Manager can request BCD and other boot files.
 
 ---
 
@@ -150,10 +176,16 @@ Map PE sections                           ✅
 Apply x64 DIR64 relocations               ✅
         │
         ▼
-Build minimal EFI System Table            🚧
+Build minimal EFI System Table            ✅
         │
         ▼
-Implement required EFI Boot Services      ⏳
+Validate Microsoft x64 EFI ABI            ✅
+        │
+        ▼
+Implement required EFI Boot Services      🚧
+        │
+        ▼
+Implement EFI filesystem bridge           ⏳
         │
         ▼
 Enter bootmgfw.efi                         ⏳
@@ -192,15 +224,19 @@ ntoskrnl.exe                              ⏳
 - [x] minimal System Table prototype
 - [x] console/output shim prototype
 - [x] Microsoft x64 ABI test path
-- [ ] memory map service
-- [ ] `AllocatePages` / `FreePages`
-- [ ] `AllocatePool` / `FreePool`
-- [ ] `HandleProtocol`
-- [ ] `LocateProtocol`
+- [x] executable `bootmgfw.efi` mapping
+- [x] entry-point preparation
+- [x] Stage 3 verified on real PS4 hardware
+- [ ] memory map service — Stage 3.1 test pending
+- [ ] `AllocatePages` / `FreePages` — Stage 3.1 test pending
+- [ ] `AllocatePool` / `FreePool` — Stage 3.1 test pending
+- [ ] `HandleProtocol` — Stage 3.1 test pending
+- [ ] `LocateProtocol` — Stage 3.1 test pending
 - [ ] `OpenProtocol`
-- [ ] Loaded Image protocol
-- [ ] Device Path protocol
-- [ ] Simple File System protocol
+- [ ] Loaded Image protocol — Stage 3.1 test pending
+- [ ] Device Path protocol — Stage 3.1 test pending
+- [ ] Simple File System protocol — Stage 3.1 publication test pending
+- [ ] EFI File Protocol filesystem bridge
 - [ ] Block I/O protocol
 - [ ] ACPI configuration table
 - [ ] GOP-compatible framebuffer description
@@ -252,7 +288,8 @@ PS4-Windows-Loader/
 ├── payload/
 │   ├── stage1.c
 │   ├── stage2*.c
-│   └── stage3.c           # current development payload
+│   ├── stage3.c
+│   └── stage3_1.c         # current development payload
 ├── loader/
 │   ├── include/           # shared loader interfaces
 │   └── src/               # portable PE/boot core
