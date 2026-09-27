@@ -12,7 +12,7 @@ permissions:
 
 env:
   PS4_LOADER_COMMIT: f70f43a60a973b3662daeb29c1f115d95408db93
-  LATEST_STAGE: stage3_2
+  LATEST_STAGE: stage3_3
 
 jobs:
   stage0-core:
