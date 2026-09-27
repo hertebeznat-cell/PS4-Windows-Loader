@@ -12,7 +12,7 @@ permissions:
 
 env:
   PS4_LOADER_COMMIT: f70f43a60a973b3662daeb29c1f115d95408db93
-  LATEST_STAGE: stage3
+  LATEST_STAGE: stage3_1
 
 jobs:
   stage0-core:
@@ -43,21 +43,17 @@ jobs:
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-
       - name: Install PS4 payload toolchain dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential binutils git python3 yasm
-
       - name: Fetch pinned PS4 payload runtime
         run: |
           git clone https://github.com/ps4-linux/ps4-linux-loader.git ps4-runtime
           git -C ps4-runtime checkout "$PS4_LOADER_COMMIT"
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
-
       - name: Build PS4 freestanding runtime
         run: make -C ps4-runtime/lib
-
       - name: Build latest payload
         run: |
           mkdir -p build/latest
@@ -69,7 +65,6 @@ jobs:
             ps4-runtime/lib/lib.a "payload/${LATEST_STAGE}.c" \
             -Wl,-gc-sections \
             -o build/latest/PS4WindowsLoader-latest.elf
-
           objcopy build/latest/PS4WindowsLoader-latest.elf \
             --only-section .text \
             --only-section .data \
@@ -77,7 +72,6 @@ jobs:
             --only-section .rodata \
             -O binary \
             build/latest/PS4WindowsLoader-latest.bin
-
       - name: Inspect latest payload
         run: |
           file build/latest/PS4WindowsLoader-latest.elf
@@ -86,7 +80,6 @@ jobs:
           sha256sum build/latest/PS4WindowsLoader-latest.bin | tee build/latest/SHA256SUMS.txt
           cp PS4_RUNTIME_COMMIT.txt build/latest/
           printf '%s\n' "$LATEST_STAGE" > build/latest/STAGE.txt
-
       - name: Upload latest payload only
         uses: actions/upload-artifact@v4
         with:
