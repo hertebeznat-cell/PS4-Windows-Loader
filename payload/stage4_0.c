@@ -1,0 +1,101 @@
+#include <time.h>
+#define STAGE3_5_NO_MAIN 1
+#include "stage3_5.c"
+
+#define EFI_LOADER_CODE 1U
+#define EFI_LOADER_DATA 2U
+#define EFI_NATIVE_INTERFACE 0U
+#define EFI_LOCATE_ALL_HANDLES 0U
+#define MAX_ALLOCS40 128U
+#define MAX_CONFIG40 8U
+
+typedef struct { int used; int pool; void *base; UINTN pages; u32 type; } ALLOC40;
+typedef struct { EFI_GUID VendorGuid; void *VendorTable; } EFI_CONFIGURATION_TABLE_40;
+typedef EFI_STATUS (EFIAPI *efi_entry40_fn)(EFI_HANDLE,EFI_SYSTEM_TABLE*);
+typedef EFI_STATUS (EFIAPI *locate_handle40_fn)(u32,EFI_GUID*,void*,UINTN*,EFI_HANDLE*);
+typedef EFI_STATUS (EFIAPI *locate_device_path40_fn)(EFI_GUID*,EFI_DEVICE_PATH_PROTOCOL_32**,EFI_HANDLE*);
+typedef EFI_STATUS (EFIAPI *install_config40_fn)(EFI_GUID*,void*);
+
+typedef struct { u16 ScanCode; CHAR16 UnicodeChar; } EFI_INPUT_KEY_40;
+typedef struct EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40 EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40;
+typedef EFI_STATUS (EFIAPI *text_in_reset40_fn)(EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40*,u8);
+typedef EFI_STATUS (EFIAPI *text_in_read40_fn)(EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40*,EFI_INPUT_KEY_40*);
+struct EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40 { text_in_reset40_fn Reset; text_in_read40_fn ReadKeyStroke; EFI_EVENT_35 WaitForKey; };
+typedef struct { int MaxMode; int Mode; int Attribute; int CursorColumn; int CursorRow; u8 CursorVisible; } SIMPLE_TEXT_OUTPUT_MODE_40;
+
+static ALLOC40 alloc40[MAX_ALLOCS40];
+static EFI_CONFIGURATION_TABLE_40 config40[MAX_CONFIG40];
+static UINTN config_count40;
+static UINTN arena_pages40=4096;
+static union { u64 align; u8 bytes[256]; } loaded_path40;
+static EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40 conin40;
+static SIMPLE_TEXT_OUTPUT_MODE_40 conout_mode40;
+static u64 conin_handle40=0x3034494e4f435350ULL;
+static u64 trace_bits40;
+
+static void trace_once40(u64 bit,const char*msg){if(!(trace_bits40&bit)){trace_bits40|=bit;notify(msg);}}
+static ALLOC40*free_slot40(void){UINTN i;for(i=0;i<MAX_ALLOCS40;i++)if(!alloc40[i].used)return &alloc40[i];return 0;}
+static ALLOC40*find_alloc40(void*b,int pool){UINTN i;for(i=0;i<MAX_ALLOCS40;i++)if(alloc40[i].used&&alloc40[i].base==b&&alloc40[i].pool==pool)return &alloc40[i];return 0;}
+
+static EFI_STATUS EFIAPI alloc_pages40(u32 at,u32 mt,UINTN pages,EFI_PHYSICAL_ADDRESS*out){ALLOC40*r;void*p;size_t bytes;if(!out||!pages)return EFI_INVALID_PARAMETER;if(at!=EFI_ALLOCATE_ANY_PAGES)return EFI_UNSUPPORTED;trace_once40(1ULL<<0,"Stage 4.0 trace: AllocatePages");r=free_slot40();if(!r)return EFI_OUT_OF_RESOURCES;bytes=(size_t)(pages*EFI_PAGE_SIZE);p=mmap(0,bytes,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);if(p==(void*)-1)return EFI_OUT_OF_RESOURCES;r->used=1;r->base=p;r->pages=pages;r->type=mt;*out=(u64)(unsigned long)p;++map_key32;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI free_pages40(EFI_PHYSICAL_ADDRESS a,UINTN pages){ALLOC40*r=find_alloc40((void*)(unsigned long)a,0);if(!r||r->pages!=pages)return EFI_INVALID_PARAMETER;if(munmap(r->base,(size_t)(r->pages*EFI_PAGE_SIZE))!=0)return EFI_INVALID_PARAMETER;mem_zero(r,sizeof(*r));++map_key32;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI alloc_pool40(u32 mt,UINTN size,void**out){struct pool_header32*h;ALLOC40*r;size_t total,map;if(!out||!size)return EFI_INVALID_PARAMETER;trace_once40(1ULL<<1,"Stage 4.0 trace: AllocatePool");r=free_slot40();if(!r)return EFI_OUT_OF_RESOURCES;total=(size_t)size+sizeof(*h);map=(total+4095U)&~4095U;h=(struct pool_header32*)mmap(0,map,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);if(h==(struct pool_header32*)-1)return EFI_OUT_OF_RESOURCES;h->magic=POOL_MAGIC32;h->size=(u64)map;r->used=1;r->pool=1;r->base=h;r->pages=(UINTN)(map/4096U);r->type=mt;*out=(void*)(h+1);++map_key32;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI free_pool40(void*p){struct pool_header32*h;ALLOC40*r;if(!p)return EFI_INVALID_PARAMETER;h=((struct pool_header32*)p)-1;if(h->magic!=POOL_MAGIC32)return EFI_INVALID_PARAMETER;r=find_alloc40(h,1);if(!r)return EFI_INVALID_PARAMETER;if(munmap(h,(size_t)h->size)!=0)return EFI_INVALID_PARAMETER;mem_zero(r,sizeof(*r));++map_key32;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI get_map40(UINTN*size,EFI_MEMORY_DESCRIPTOR*map,UINTN*key,UINTN*ds,u32*ver){UINTN i,n=1,need,pos=0;EFI_MEMORY_DESCRIPTOR*d;if(!size||!key||!ds||!ver)return EFI_INVALID_PARAMETER;trace_once40(1ULL<<2,"Stage 4.0 trace: GetMemoryMap");for(i=0;i<MAX_ALLOCS40;i++)if(alloc40[i].used)++n;need=n*(UINTN)sizeof(EFI_MEMORY_DESCRIPTOR);*ds=sizeof(EFI_MEMORY_DESCRIPTOR);*ver=1;*key=map_key32;if(!map||*size<need){*size=need;return EFI_BUFFER_TOO_SMALL;}mem_zero(map,(size_t)need);d=(EFI_MEMORY_DESCRIPTOR*)((u8*)map+pos);d->Type=EFI_CONVENTIONAL_MEMORY;d->PhysicalStart=(u64)(unsigned long)arena32;d->NumberOfPages=arena_pages40;pos+=sizeof(*d);for(i=0;i<MAX_ALLOCS40;i++)if(alloc40[i].used){d=(EFI_MEMORY_DESCRIPTOR*)((u8*)map+pos);d->Type=alloc40[i].type;d->PhysicalStart=(u64)(unsigned long)alloc40[i].base;d->NumberOfPages=alloc40[i].pages;pos+=sizeof(*d);}*size=need;return EFI_SUCCESS;}
+
+static EFI_HANDLE match_handle40(EFI_GUID*g){if(!g)return 0;if(guid_eq35(g,&loaded_guid32))return(EFI_HANDLE)&image_handle32;if(guid_eq35(g,&device_path_guid32)||guid_eq35(g,&simple_fs_guid32))return(EFI_HANDLE)&device_handle32;return 0;}
+static EFI_STATUS EFIAPI handle40(EFI_HANDLE h,EFI_GUID*g,void**out){trace_once40(1ULL<<3,"Stage 4.0 trace: HandleProtocol");return protocol32(h,g,out);}
+static EFI_STATUS EFIAPI locate_protocol40(EFI_GUID*g,void*reg,void**out){trace_once40(1ULL<<4,"Stage 4.0 trace: LocateProtocol");return locate32(g,reg,out);}
+static EFI_STATUS EFIAPI open_protocol40(EFI_HANDLE h,EFI_GUID*g,void**iface,EFI_HANDLE a,EFI_HANDLE c,u32 attr){trace_once40(1ULL<<5,"Stage 4.0 trace: OpenProtocol");return open_protocol35(h,g,iface,a,c,attr);}
+static EFI_STATUS EFIAPI locate_handle40(u32 type,EFI_GUID*g,void*key,UINTN*sz,EFI_HANDLE*buf){EFI_HANDLE h;(void)key;trace_once40(1ULL<<6,"Stage 4.0 trace: LocateHandle");if(!sz)return EFI_INVALID_PARAMETER;if(type==EFI_LOCATE_ALL_HANDLES)h=(EFI_HANDLE)&device_handle32;else if(type==EFI_LOCATE_BY_PROTOCOL)h=match_handle40(g);else return EFI_UNSUPPORTED;if(!h)return EFI_NOT_FOUND;if(!buf||*sz<sizeof(EFI_HANDLE)){*sz=sizeof(EFI_HANDLE);return EFI_BUFFER_TOO_SMALL;}buf[0]=h;*sz=sizeof(EFI_HANDLE);return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI locate_handle_buffer40(u32 type,EFI_GUID*g,void*key,UINTN*count,EFI_HANDLE**buffer){EFI_HANDLE h;EFI_STATUS rc;(void)key;trace_once40(1ULL<<7,"Stage 4.0 trace: LocateHandleBuffer");if(!count||!buffer)return EFI_INVALID_PARAMETER;*count=0;*buffer=0;if(type!=EFI_LOCATE_BY_PROTOCOL)return EFI_UNSUPPORTED;h=match_handle40(g);if(!h)return EFI_NOT_FOUND;rc=alloc_pool40(EFI_BOOT_SERVICES_DATA,sizeof(EFI_HANDLE),(void**)buffer);if(rc!=EFI_SUCCESS)return rc;(*buffer)[0]=h;*count=1;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI protocols_per_handle40(EFI_HANDLE h,EFI_GUID***buffer,UINTN*count){UINTN n;EFI_STATUS rc;if(!h||!buffer||!count)return EFI_INVALID_PARAMETER;*buffer=0;*count=0;if(h==(EFI_HANDLE)&image_handle32)n=1;else if(h==(EFI_HANDLE)&device_handle32)n=2;else return EFI_NOT_FOUND;rc=alloc_pool40(EFI_BOOT_SERVICES_DATA,n*sizeof(EFI_GUID*),(void**)buffer);if(rc!=EFI_SUCCESS)return rc;if(n==1)(*buffer)[0]=(EFI_GUID*)&loaded_guid32;else{(*buffer)[0]=(EFI_GUID*)&device_path_guid32;(*buffer)[1]=(EFI_GUID*)&simple_fs_guid32;}*count=n;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI locate_device_path40(EFI_GUID*g,EFI_DEVICE_PATH_PROTOCOL_32**path,EFI_HANDLE*dev){trace_once40(1ULL<<8,"Stage 4.0 trace: LocateDevicePath");if(!g||!path||!*path||!dev)return EFI_INVALID_PARAMETER;if(guid_eq35(g,&simple_fs_guid32)||guid_eq35(g,&device_path_guid32)){*dev=(EFI_HANDLE)&device_handle32;return EFI_SUCCESS;}return EFI_NOT_FOUND;}
+static EFI_STATUS EFIAPI register_notify40(EFI_GUID*g,EFI_EVENT_35 e,void**reg){if(!g||!e||!reg)return EFI_INVALID_PARAMETER;*reg=(void*)g;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI open_info40(EFI_HANDLE h,EFI_GUID*g,void**entries,UINTN*count){void*x=0;if(!h||!g||!entries||!count)return EFI_INVALID_PARAMETER;if(protocol32(h,g,&x)!=EFI_SUCCESS)return EFI_NOT_FOUND;*entries=0;*count=0;return EFI_SUCCESS;}
+
+static void refresh_crc40(void){bs32.Hdr.CRC32=0;bs32.Hdr.CRC32=crc32_bytes(&bs32,sizeof(bs32));g_system_table.Hdr.CRC32=0;g_system_table.Hdr.CRC32=crc32_bytes(&g_system_table,g_system_table.Hdr.HeaderSize);}
+static EFI_STATUS EFIAPI install_config40(EFI_GUID*g,void*table){UINTN i;trace_once40(1ULL<<9,"Stage 4.0 trace: InstallConfigurationTable");if(!g)return EFI_INVALID_PARAMETER;for(i=0;i<config_count40;i++)if(guid_eq35(g,&config40[i].VendorGuid)){if(!table){UINTN j;for(j=i+1;j<config_count40;j++)config40[j-1]=config40[j];--config_count40;}else config40[i].VendorTable=table;g_system_table.NumberOfTableEntries=config_count40;g_system_table.ConfigurationTable=config_count40?config40:0;refresh_crc40();return EFI_SUCCESS;}if(!table)return EFI_NOT_FOUND;if(config_count40>=MAX_CONFIG40)return EFI_OUT_OF_RESOURCES;config40[config_count40].VendorGuid=*g;config40[config_count40].VendorTable=table;++config_count40;g_system_table.NumberOfTableEntries=config_count40;g_system_table.ConfigurationTable=config40;refresh_crc40();return EFI_SUCCESS;}
+
+static EFI_STATUS EFIAPI file_open40(EFI_FILE_PROTOCOL_32*p,EFI_FILE_PROTOCOL_32**n,CHAR16*name,u64 mode,u64 attrs){EFI_STATUS rc;trace_once40(1ULL<<10,"Stage 4.0 trace: EFI File Open");rc=file_open35(p,n,name,mode,attrs);if(rc==EFI_SUCCESS&&n&&*n)(*n)->Open=file_open40;return rc;}
+static EFI_STATUS EFIAPI get_variable40(CHAR16*n,EFI_GUID*v,u32*a,UINTN*s,void*d){trace_once40(1ULL<<11,"Stage 4.0 trace: Runtime GetVariable");return rt_get_variable35(n,v,a,s,d);}
+
+static EFI_STATUS EFIAPI install_protocol40(EFI_HANDLE*h,EFI_GUID*g,u32 t,void*i){(void)h;(void)g;(void)t;(void)i;notify("Stage 4.0 trace: InstallProtocolInterface -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI reinstall_protocol40(EFI_HANDLE h,EFI_GUID*g,void*o,void*n){(void)h;(void)g;(void)o;(void)n;notify("Stage 4.0 trace: ReinstallProtocolInterface -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI uninstall_protocol40(EFI_HANDLE h,EFI_GUID*g,void*i){(void)h;(void)g;(void)i;notify("Stage 4.0 trace: UninstallProtocolInterface -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI load_image40(u8 b,EFI_HANDLE p,EFI_DEVICE_PATH_PROTOCOL_32*d,void*s,UINTN z,EFI_HANDLE*i){(void)b;(void)p;(void)d;(void)s;(void)z;(void)i;notify("Stage 4.0 trace: LoadImage -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI start_image40(EFI_HANDLE i,UINTN*s,CHAR16**d){(void)i;(void)s;(void)d;notify("Stage 4.0 trace: StartImage -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI image_exit40(EFI_HANDLE i,EFI_STATUS st,UINTN n,CHAR16*d){(void)n;(void)d;if(i!=(EFI_HANDLE)&image_handle32)return EFI_INVALID_PARAMETER;notify("Stage 4.0 trace: Exit called");return st;}
+static EFI_STATUS EFIAPI unload_image40(EFI_HANDLE i){(void)i;return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI connect40(EFI_HANDLE c,EFI_HANDLE*d,EFI_DEVICE_PATH_PROTOCOL_32*p,u8 r){(void)c;(void)d;(void)p;(void)r;return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI disconnect40(EFI_HANDLE c,EFI_HANDLE d,EFI_HANDLE h){(void)c;(void)d;(void)h;return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI multi_install40(EFI_HANDLE*h,void*first){(void)h;(void)first;notify("Stage 4.0 trace: InstallMultipleProtocolInterfaces -> UNSUPPORTED");return EFI_UNSUPPORTED;}
+static EFI_STATUS EFIAPI multi_uninstall40(EFI_HANDLE h,void*first){(void)h;(void)first;return EFI_UNSUPPORTED;}
+
+static EFI_STATUS EFIAPI conin_reset40(EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40*self,u8 ext){(void)self;(void)ext;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conin_read40(EFI_SIMPLE_TEXT_INPUT_PROTOCOL_40*self,EFI_INPUT_KEY_40*key){(void)self;(void)key;return EFI_NOT_READY;}
+static EFI_STATUS EFIAPI conout_reset40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,u8 ext){(void)self;(void)ext;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_test40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,CHAR16*s){(void)self;(void)s;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_query40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,UINTN mode,UINTN*cols,UINTN*rows){(void)self;if(mode>0||!cols||!rows)return EFI_UNSUPPORTED;*cols=80;*rows=25;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_set_mode40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,UINTN mode){(void)self;if(mode>0)return EFI_UNSUPPORTED;conout_mode40.Mode=(int)mode;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_attr40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,UINTN attr){(void)self;conout_mode40.Attribute=(int)attr;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_clear40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self){(void)self;trace_once40(1ULL<<12,"Stage 4.0 trace: Console ClearScreen");return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_cursor40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,UINTN col,UINTN row){(void)self;conout_mode40.CursorColumn=(int)col;conout_mode40.CursorRow=(int)row;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI conout_cursor_enable40(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*self,u8 vis){(void)self;conout_mode40.CursorVisible=vis;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI get_time40(EFI_TIME_35*t,EFI_TIME_CAPABILITIES_35*c){if(!t)return EFI_INVALID_PARAMETER;mem_zero(t,sizeof(*t));t->Year=2026;t->Month=9;t->Day=27;if(c){c->Resolution=1;c->Accuracy=50000000U;c->SetsToZero=0;}trace_once40(1ULL<<13,"Stage 4.0 trace: Runtime GetTime");return EFI_SUCCESS;}
+
+static void install_stage40_services(void){void*big;mem_zero(alloc40,sizeof(alloc40));config_count40=0;trace_bits40=0;big=mmap(0,128U*1024U*1024U,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);if(big!=(void*)-1){munmap(arena32,16U*1024U*1024U);arena32=big;arena_pages40=32768;}else arena_pages40=4096;
+bs32.AllocatePages=alloc_pages40;bs32.FreePages=free_pages40;bs32.GetMemoryMap=get_map40;bs32.AllocatePool=alloc_pool40;bs32.FreePool=free_pool40;bs32.HandleProtocol=handle40;bs32.LocateProtocol=locate_protocol40;bs32.OpenProtocol=(void*)open_protocol40;bs32.InstallProtocolInterface=(void*)install_protocol40;bs32.ReinstallProtocolInterface=(void*)reinstall_protocol40;bs32.UninstallProtocolInterface=(void*)uninstall_protocol40;bs32.RegisterProtocolNotify=(void*)register_notify40;bs32.LocateHandle=(void*)locate_handle40;bs32.LocateDevicePath=(void*)locate_device_path40;bs32.InstallConfigurationTable=(void*)install_config40;bs32.LoadImage=(void*)load_image40;bs32.StartImage=(void*)start_image40;bs32.Exit=(void*)image_exit40;bs32.UnloadImage=(void*)unload_image40;bs32.ConnectController=(void*)connect40;bs32.DisconnectController=(void*)disconnect40;bs32.OpenProtocolInformation=(void*)open_info40;bs32.LocateHandleBuffer=(void*)locate_handle_buffer40;bs32.ProtocolsPerHandle=(void*)protocols_per_handle40;bs32.InstallMultipleProtocolInterfaces=(void*)multi_install40;bs32.UninstallMultipleProtocolInterfaces=(void*)multi_uninstall40;
+root32.proto.Open=file_open40;rt35.GetVariable=get_variable40;rt35.GetTime=get_time40;rt35.Hdr.CRC32=0;rt35.Hdr.CRC32=crc32_bytes(&rt35,sizeof(rt35));
+mem_zero(&conin40,sizeof(conin40));conin40.Reset=conin_reset40;conin40.ReadKeyStroke=conin_read40;mem_zero(&conout_mode40,sizeof(conout_mode40));conout_mode40.MaxMode=1;conout_mode40.Mode=0;conout_mode40.CursorVisible=1;g_conout.Reset=(void*)conout_reset40;g_conout.TestString=(void*)conout_test40;g_conout.QueryMode=(void*)conout_query40;g_conout.SetMode=(void*)conout_set_mode40;g_conout.SetAttribute=(void*)conout_attr40;g_conout.ClearScreen=(void*)conout_clear40;g_conout.SetCursorPosition=(void*)conout_cursor40;g_conout.EnableCursor=(void*)conout_cursor_enable40;g_conout.Mode=&conout_mode40;g_system_table.ConsoleInHandle=(EFI_HANDLE)&conin_handle40;g_system_table.ConIn=&conin40;g_system_table.RuntimeServices=&rt35;g_system_table.BootServices=&bs32;refresh_crc40();}
+
+static int map_sections40(const u8*file,size_t file_size,const struct pe_info*pe,u8*image){u16 i;mem_zero(image,pe->image_size);mem_copy(image,file,pe->headers_size);for(i=0;i<pe->section_count;i++){const u8*sh=pe->sections+(size_t)i*40U;u32 va=u32le(sh+12),raw=u32le(sh+16),ptr=u32le(sh+20);if(va>=pe->image_size)return-1;if(!raw)continue;if((u64)ptr+raw>(u64)file_size)return-2;if((u64)va+raw>(u64)pe->image_size)return-3;mem_copy(image+va,file+ptr,raw);}return 0;}
+static void build_loaded_path40(void){static CHAR16 p[]={'\\','E','F','I','\\','M','i','c','r','o','s','o','f','t','\\','B','o','o','t','\\','b','o','o','t','m','g','f','w','.','e','f','i',0};size_t n=0,i,node;u8*b=loaded_path40.bytes;while(p[n])++n;node=4+(n+1)*2;mem_zero(b,sizeof(loaded_path40.bytes));b[0]=4;b[1]=4;b[2]=(u8)node;b[3]=(u8)(node>>8);for(i=0;i<=n;i++){b[4+i*2]=(u8)p[i];b[5+i*2]=(u8)(p[i]>>8);}b[node]=0x7f;b[node+1]=0xff;b[node+2]=4;b[node+3]=0;}
+static void notify_status40(EFI_STATUS st){char s[64]="Stage 4.0: bootmgfw returned 0x0000000000000000";static const char h[]="0123456789ABCDEF";int i;for(i=0;i<16;i++)s[31+i]=h[(st>>(60-i*4))&0xf];notify(s);}
+
+int main(void){u8*file=0,*image=0;size_t file_size=0;struct pe_info pe;UINTN pages;EFI_PHYSICAL_ADDRESS imgaddr=0;efi_entry40_fn entry;EFI_STATUS rc;
+notify("PS4 Windows Loader: Stage 4.0 started");build_efi_shim();if(build32()!=0){notify("Stage 4.0: EFI environment build FAILED");return 1;}install_stage35_services();install_stage40_services();notify("Stage 4.0: firmware environment ready");
+if(load_bootmgfw(&file,&file_size)!=0||inspect_pe(file,file_size,&pe)!=0){if(file)munmap(file,(size_t)READ_CAP);notify("Stage 4.0: bootmgfw read/PE validation FAILED");return 1;}pages=(pe.image_size+4095U)/4096U;if(alloc_pages40(EFI_ALLOCATE_ANY_PAGES,EFI_LOADER_CODE,pages,&imgaddr)!=EFI_SUCCESS){munmap(file,(size_t)READ_CAP);notify("Stage 4.0: bootmgfw AllocatePages FAILED");return 1;}image=(u8*)(unsigned long)imgaddr;if(map_sections40(file,file_size,&pe,image)!=0||apply_relocs(image,&pe)!=0){free_pages40(imgaddr,pages);munmap(file,(size_t)READ_CAP);notify("Stage 4.0: bootmgfw map/relocations FAILED");return 1;}
+build_loaded_path40();loaded32.SystemTable=&g_system_table;loaded32.DeviceHandle=(EFI_HANDLE)&device_handle32;loaded32.FilePath=(EFI_DEVICE_PATH_PROTOCOL_32*)loaded_path40.bytes;loaded32.ImageBase=image;loaded32.ImageSize=pe.image_size;loaded32.ImageCodeType=EFI_LOADER_CODE;loaded32.ImageDataType=EFI_LOADER_DATA;entry=(efi_entry40_fn)(image+pe.entry_rva);refresh_crc40();
+notify("Stage 4.0: bootmgfw mapped + LoadedImage ready");notify("Stage 4.0: ENTERING Microsoft bootmgfw.efi NOW");rc=entry((EFI_HANDLE)&image_handle32,&g_system_table);notify("Stage 4.0: Microsoft bootmgfw.efi RETURNED");notify_status40(rc);
+free_pages40(imgaddr,pages);munmap(file,(size_t)READ_CAP);munmap(arena32,(size_t)(arena_pages40*EFI_PAGE_SIZE));return 0;}
