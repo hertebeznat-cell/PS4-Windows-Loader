@@ -10,6 +10,8 @@
  * pages. The matching munmap path releases the full backing window.
  */
 
+#include <signal.h>
+#include <sys/ucontext.h>
 #define PS4WL_STAGE48 1
 #define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE48.LOG"
 #define mmap ps4wl_mmap48
@@ -24,6 +26,7 @@ int munmap(void *addr, size_t len);
 extern int errno;
 int __sysctl(int *name, unsigned int namelen, void *oldp, size_t *oldlenp,
              void *newp, size_t newlen);
+void sys_exit(int status);
 
 #define WINDOW48_BASE 0x0000000000100000ULL
 #define WINDOW48_SIZE 0x0000000000004000ULL
@@ -36,6 +39,49 @@ int __sysctl(int *name, unsigned int namelen, void *oldp, size_t *oldlenp,
 static int window48_active;
 static int trace48_busy;
 static size_t native_page_size48;
+static int fault48_installed;
+
+static void fault48(int signo,siginfo_t *info,void *context)
+{
+    ucontext_t *uc=(ucontext_t*)context;
+    u64 rip=uc?(u64)uc->uc_mcontext.mc_rip:0;
+    u64 base=(u64)(unsigned long)loaded32.ImageBase;
+    log45("FAULT48: synchronous processor fault\n");
+    log_hex45("FAULT48: signal=",(u64)(u32)signo);
+    if(info){
+        log_hex45("FAULT48: code=",(u64)(u32)info->si_code);
+        log_hex45("FAULT48: address=",(u64)(unsigned long)info->si_addr);
+    }
+    if(uc){
+        log_hex45("FAULT48: rip=",rip);
+        log_hex45("FAULT48: rsp=",(u64)uc->uc_mcontext.mc_rsp);
+        log_hex45("FAULT48: trap=",(u64)uc->uc_mcontext.mc_trapno);
+        log_hex45("FAULT48: error=",(u64)uc->uc_mcontext.mc_err);
+    }
+    if(base && rip>=base && rip-base<loaded32.ImageSize)
+        log_hex45("FAULT48: bootmgfw image offset=",rip-base);
+    /* Do not resume the instruction that faulted. */
+    sys_exit(128+signo);
+    for(;;){}
+}
+
+static void install_fault48(void)
+{
+    struct sigaction action;
+    int signals[]={SIGSEGV,SIGBUS,SIGILL};
+    UINTN i;
+    if(fault48_installed)return;
+    fault48_installed=1;
+    mem_zero(&action,sizeof(action));
+    action.sa_sigaction=fault48;
+    action.sa_flags=SA_SIGINFO|SA_RESETHAND;
+    for(i=0;i<(UINTN)(sizeof(signals)/sizeof(signals[0]));i++){
+        int rc=sigaction(signals[i],&action,0);
+        log_hex45("FAULT48: installing handler for signal=",(u64)(u32)signals[i]);
+        log_hex45("FAULT48: sigaction status=",(u64)(u32)rc);
+        if(rc!=0)log_hex45("FAULT48: sigaction errno=",(u64)(u32)errno);
+    }
+}
 
 static size_t page_size48(void)
 {
@@ -95,6 +141,7 @@ void *ps4wl_mmap48(void *addr,size_t len,int prot,int flags,int fd,off_t off)
                len==(size_t)EFI_PAGE_SIZE && (flags&MAP_ANONYMOUS);
     void *p;
 
+    if(target)install_fault48();
     if(target && !window48_active && window48_free()){
         errno=0;
         p=mmap((void*)(unsigned long)WINDOW48_BASE,(size_t)WINDOW48_SIZE,
