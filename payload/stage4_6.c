@@ -2,17 +2,19 @@
  *
  * The Stage 4.5 hardware log shows that Microsoft requests one page at the
  * exact address 0x00102000 and the current allocator returns EFI_NOT_FOUND.
- * This revision does not force that mapping.  It records what address the
+ * This revision does not force that mapping. It records what address the
  * underlying OS returns when a low-address mmap hint is requested, so the
  * next allocator change can be based on observed behaviour rather than a
  * guess.
  */
 
 #define mmap ps4wl_mmap46
-#define main stage4_5_base_main
 #include "stage4_5.c"
-#undef main
 #undef mmap
+
+/* The system header declaration was macro-renamed above, so restore the real
+ * mmap prototype for the diagnostic wrapper implementation below. */
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
 
 static int mmap46_busy;
 
@@ -32,10 +34,4 @@ void *ps4wl_mmap46(void *addr, size_t len, int prot, int flags, int fd, off_t of
     }
 
     return p;
-}
-
-int main(void)
-{
-    notify("PS4 Windows Loader: Stage 4.6 diagnostic started");
-    return stage4_5_base_main();
 }
