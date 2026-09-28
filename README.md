@@ -17,8 +17,9 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > This is boot research, not a working Windows installation. `bootmgfw.efi` has
 > executed on a PS4, but `winload.efi`, the Windows kernel, setup, graphics, and
 > device drivers have **not** been reached. The latest Stage 4.8 trace records
-> `SIGBUS` immediately after the low-address allocation succeeds. The next
-> build tests a narrowly matched workaround for its privileged `CR3` read.
+> `SIGBUS` immediately after the low-address allocation succeeds. A later
+> experimental build reached another fault, and a console shutdown was reported.
+> Hardware tests are paused pending investigation.
 
 ## Where it stands
 
@@ -46,16 +47,15 @@ Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
 `SIGBUS`, code `3`, and `siginfo.si_addr=0x40058666`, within the mapped
 `bootmgfw.efi` image at offset `0x58666`. The next trace confirmed the bytes
 `0F 20 D8` there, an x86-64 instruction that reads `CR3` and cannot run in
-the PS4 payload's user process. The current build checks the surrounding bytes
-and replaces that one instruction with a zero result, then logs
-`CR3PROBE48`. The next hardware run passed that instruction and stopped at a
-second `SIGBUS`, with `si_addr` at image offset `0x28544A`. The handler now
-records the bytes around new fault addresses for instruction analysis. This
-experiment does not supply real page tables or establish a working Windows boot. The
-previous handler's reported
+the PS4 payload's user process. An experimental build replaced the instruction
+with a zero result and reached a second `SIGBUS` at offset `0x28544A`. A console
+shutdown and system storage check were then reported; their cause has not been
+established. The instruction replacement has been removed from `main`.
+The previous handler's reported
 instruction and stack pointers are unreliable because its context layout does
 not match the signal frame seen on this PS4. The diagnostic logs raw context
-words and image bytes near that offset; another hardware run is required.
+words and image bytes near a fault address. Do not run this payload again while
+the console shutdown is under investigation.
 
 ## Boot path
 
@@ -83,16 +83,16 @@ These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
 complete its own BCD processing or start Windows.
 
-## Build and collect the next trace
+## Build and trace collection (paused)
 
 1. Download the **PS4-Windows-Loader-Latest** artifact from the latest
    [successful CI run](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml).
    Inspect `STAGE.txt` and `SHA256SUMS.txt`; CI builds `payload/stage4_8.c`.
 2. Supply `EFI/Microsoft/Boot/bootmgfw.efi` and `EFI/Microsoft/Boot/BCD` on
    your own test USB volume. These files are not included in this repository.
-3. Run `PS4WindowsLoader-latest.bin` with the PS4 payload method for your test
-   console. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`.
-4. Preserve the complete log. Check the `CR3PROBE48` result. A `FAULT48` entry records a delivered signal,
+3. Hardware runs are paused after the reported shutdown and storage check.
+   Existing Stage 4.8 traces were written to `/mnt/usb0/PS4WL_STAGE48.LOG`.
+4. Preserve the existing complete logs. A `FAULT48` entry records a delivered signal,
    its reported fault address, raw context words and `FAULT48: image word=`
    lines near that address. If no `FAULT48` line appears,
    the log alone cannot distinguish a stall from a fault the process could not
@@ -113,8 +113,8 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Identify the instruction at the new `SIGBUS` offset `0x28544A` from the next
-   Stage 4.8 trace. Never force-map over an occupied page.
+1. Investigate the reported console shutdown before resuming hardware tests.
+   Never force-map over an occupied page.
 2. Model a truthful, stable physical memory map and required firmware tables;
    the current process mappings and synthetic EFI descriptors are insufficient
    for a Windows kernel handoff.
