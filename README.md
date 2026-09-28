@@ -120,6 +120,11 @@ the latest artifact on the console.
 The separate [CPU-only probe](docs/CPU_PROBE.md) records processor flags with
 far less setup and does not read or map a Windows image.
 
+A separate [returning CPU context probe](docs/CONTEXT_PROBE.md) is now built as
+**PS4-Windows-Loader-Context-Probe**. It tests the existing runtime callback,
+records real control registers at CPL0 and checks return to CPL3. Hardware
+verification is pending; it is not a Windows launcher.
+
 The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
 a privileged backend must establish before any further Boot Manager entry.
 

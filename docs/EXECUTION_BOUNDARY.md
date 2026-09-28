@@ -77,6 +77,13 @@ Its argument layout and entry sequence cannot be substituted for an EFI call.
 Adapting it requires a Windows/EFI-specific firmware environment that no longer
 depends on PS4 user-process syscalls after the transition.
 
+## Returning callback implementation
+
+The [context probe](CONTEXT_PROBE.md) uses the pinned runtime callback facility
+to read CPU state and return. Host tests cover the CPL3 guard and reporting
+failures; target CPL0 execution is pending verification. This callback does not
+replace the EFI handoff or remove the firmware layer's process dependencies.
+
 ## Remaining implementation
 
 1. Separate the portable PE/COFF and EFI-table construction code from calls

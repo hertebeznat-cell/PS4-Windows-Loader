@@ -67,6 +67,17 @@ jobs:
           ./build/test-pe
       - name: Test CPU log analysis
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_cpu_log.py
+      - name: Test returning context probe without kernel entry
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            tests/test_context_capture.c payload/context_capture.S \
+            -o build/test-context-capture
+          ./build/test-context-capture
+          clang -std=c11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/test_context_probe.c payload/context_capture.S \
+            -o build/test-context-probe
+          ./build/test-context-probe
 
   ps4-loader:
     name: Build latest PS4 loader
@@ -161,6 +172,32 @@ jobs:
         with:
           name: PS4-Windows-Loader-Latest
           path: build/latest/
+          retention-days: 30
+      - name: Build returning CPU context probe
+        run: |
+          mkdir -p build/context-probe
+          gcc -Wall -Wextra -Werror -isystem ps4-runtime/freebsd-headers \
+            -nostdinc -nostdlib -fno-stack-protector -fno-builtin \
+            -mno-red-zone -mgeneral-regs-only -static -fPIE -ffreestanding \
+            "-DPS4WL_BUILD_ID=\"${GITHUB_SHA}\"" \
+            ps4-runtime/lib/lib.a payload/context_probe.c payload/context_capture.S \
+            -Wl,-gc-sections -o build/context-probe/PS4WindowsLoader-Context-Probe.elf
+          objcopy build/context-probe/PS4WindowsLoader-Context-Probe.elf \
+            --only-section .text --only-section .data \
+            --only-section .bss --only-section .rodata -O binary \
+            build/context-probe/PS4WindowsLoader-Context-Probe.bin
+          objdump -d --disassemble=pwl_context_capture \
+            build/context-probe/PS4WindowsLoader-Context-Probe.elf \
+            > build/context-probe/CALLBACK-DISASSEMBLY.txt
+          (cd build/context-probe && sha256sum PS4WindowsLoader-Context-Probe.bin PS4WindowsLoader-Context-Probe.elf > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          cp PS4_RUNTIME_COMMIT.txt build/context-probe/
+          cp docs/CONTEXT_PROBE.md build/context-probe/README.md
+          printf '%s\n' "$GITHUB_SHA" > build/context-probe/COMMIT.txt
+      - name: Upload returning CPU context probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Context-Probe
+          path: build/context-probe/
           retention-days: 30
       - name: Upload standalone CPU probe
         uses: actions/upload-artifact@v4
