@@ -6,11 +6,12 @@
  * and, only when that whole window is free, exposes the requested 0x00102000
  * page to the existing EFI allocator.
  *
- * The extra backing pages remain an implementation detail; EFI still sees the
- * single requested page.  The matching munmap path releases the full backing
- * window if that EFI page is later freed.
+ * EFI sees the requested page plus reserved descriptors for the three backing
+ * pages. The matching munmap path releases the full backing window.
  */
 
+#define PS4WL_STAGE48 1
+#define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE48.LOG"
 #define mmap ps4wl_mmap48
 #define munmap ps4wl_munmap48
 #include "stage4_5.c"
@@ -19,10 +20,14 @@
 
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
 int munmap(void *addr, size_t len);
+/* The pinned PS4 runtime exports an errno variable, not FreeBSD's __error(). */
+extern int errno;
 
 #define WINDOW48_BASE 0x0000000000100000ULL
 #define WINDOW48_SIZE 0x0000000000004000ULL
 #define TARGET48_ADDR 0x0000000000102000ULL
+#define PS4WL_ENOMEM 12
+#define EFI_RESERVED_MEMORY_TYPE 0U
 
 static int window48_active;
 static int trace48_busy;
@@ -32,8 +37,17 @@ static int window48_free(void)
     u64 a;
     for(a=WINDOW48_BASE;a<WINDOW48_BASE+WINDOW48_SIZE;a+=EFI_PAGE_SIZE){
         char vec=0;
-        if(mincore((void*)(unsigned long)a,(size_t)EFI_PAGE_SIZE,&vec)==0)
+        int error;
+        errno=0;
+        if(mincore((void*)(unsigned long)a,(size_t)EFI_PAGE_SIZE,&vec)==0){
+            log_hex45("MMAP48: backing page occupied=",a);
             return 0;
+        }
+        error=errno;
+        if(error!=PS4WL_ENOMEM){
+            log_hex45("MMAP48: mincore unexpected errno=",(u64)(u32)error);
+            return 0;
+        }
     }
     return 1;
 }
@@ -46,15 +60,20 @@ void *ps4wl_mmap48(void *addr,size_t len,int prot,int flags,int fd,off_t off)
     void *p;
 
     if(target && !window48_active && window48_free()){
+        errno=0;
         p=mmap((void*)(unsigned long)WINDOW48_BASE,(size_t)WINDOW48_SIZE,
                prot,flags|MAP_FIXED,fd,off);
-        if(!trace48_busy){
-            trace48_busy=1;
-            log45("MMAP48: aligned backing window attempt\n");
-            log_hex45("MMAP48: window_base=",WINDOW48_BASE);
-            log_hex45("MMAP48: window_size=",WINDOW48_SIZE);
-            log_hex45("MMAP48: returned=",(u64)(unsigned long)p);
-            trace48_busy=0;
+        {
+            int map_error=errno;
+            if(!trace48_busy){
+                trace48_busy=1;
+                log45("MMAP48: aligned backing window attempt\n");
+                log_hex45("MMAP48: window_base=",WINDOW48_BASE);
+                log_hex45("MMAP48: window_size=",WINDOW48_SIZE);
+                log_hex45("MMAP48: returned=",(u64)(unsigned long)p);
+                if(p==(void*)-1)log_hex45("MMAP48: mmap errno=",(u64)(u32)map_error);
+                trace48_busy=0;
+            }
         }
         if((u64)(unsigned long)p==WINDOW48_BASE){
             window48_active=1;
@@ -65,13 +84,18 @@ void *ps4wl_mmap48(void *addr,size_t len,int prot,int flags,int fd,off_t off)
             (void)munmap(p,(size_t)WINDOW48_SIZE);
     }
 
+    errno=0;
     p=mmap(addr,len,prot,flags,fd,off);
-    if(target && !trace48_busy){
-        trace48_busy=1;
-        log45("MMAP48: normal request fallback\n");
-        log_hex45("MMAP48: requested=",requested);
-        log_hex45("MMAP48: returned=",(u64)(unsigned long)p);
-        trace48_busy=0;
+    {
+        int map_error=errno;
+        if(target && !trace48_busy){
+            trace48_busy=1;
+            log45("MMAP48: normal request fallback\n");
+            log_hex45("MMAP48: requested=",requested);
+            log_hex45("MMAP48: returned=",(u64)(unsigned long)p);
+            if(p==(void*)-1)log_hex45("MMAP48: fallback errno=",(u64)(u32)map_error);
+            trace48_busy=0;
+        }
     }
     return p;
 }
@@ -87,4 +111,41 @@ int ps4wl_munmap48(void *addr,size_t len)
         return rc;
     }
     return munmap(addr,len);
+}
+
+/* Account for the three extra mapped pages, including on size-only queries. */
+static EFI_STATUS EFIAPI get_map48(UINTN*size,EFI_MEMORY_DESCRIPTOR*map,
+                                    UINTN*key,UINTN*ds,u32*ver)
+{
+    UINTN base_size=0,needed,count,i;
+    EFI_STATUS rc;
+    if(!size||!key||!ds||!ver)return EFI_INVALID_PARAMETER;
+    rc=get_map45(&base_size,0,key,ds,ver);
+    if(rc!=EFI_BUFFER_TOO_SMALL)return rc;
+    needed=base_size+(window48_active?2U*sizeof(EFI_MEMORY_DESCRIPTOR):0U);
+    if(!map||*size<needed){*size=needed;return EFI_BUFFER_TOO_SMALL;}
+    rc=get_map45(&base_size,map,key,ds,ver);
+    if(rc!=EFI_SUCCESS)return rc;
+    if(window48_active){
+        EFI_MEMORY_DESCRIPTOR *d;
+        count=base_size/sizeof(EFI_MEMORY_DESCRIPTOR);
+        d=&map[count];
+        mem_zero(d,2U*sizeof(*d));
+        d[0].Type=EFI_RESERVED_MEMORY_TYPE;
+        d[0].PhysicalStart=WINDOW48_BASE;
+        d[0].NumberOfPages=2;
+        d[1].Type=EFI_RESERVED_MEMORY_TYPE;
+        d[1].PhysicalStart=TARGET48_ADDR+EFI_PAGE_SIZE;
+        d[1].NumberOfPages=1;
+        for(i=count;i<count+2U;i++){
+            EFI_MEMORY_DESCRIPTOR tmp=map[i];
+            UINTN j=i;
+            while(j && map[j-1U].PhysicalStart>tmp.PhysicalStart){
+                map[j]=map[j-1U];--j;
+            }
+            map[j]=tmp;
+        }
+    }
+    *size=needed;
+    return EFI_SUCCESS;
 }
