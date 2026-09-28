@@ -223,6 +223,7 @@ static void open_trace43(void)
     }
 }
 
+#ifndef STAGE4_3_NO_MAIN
 int main(void)
 {
     u8*file=0,*image=0;size_t file_size=0;struct pe_info pe;UINTN pages;
@@ -287,3 +288,4 @@ int main(void)
     munmap(arena32,(size_t)(arena_pages40*EFI_PAGE_SIZE));
     return 0;
 }
+#endif
