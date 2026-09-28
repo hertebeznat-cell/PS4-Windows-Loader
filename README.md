@@ -124,8 +124,9 @@ far less setup and does not read or map a Windows image.
 A separate [returning CPU context probe](docs/CONTEXT_PROBE.md) is now built as
 **PS4-Windows-Loader-Context-Probe**. It tests the existing runtime callback,
 records real control registers at CPL0 and checks return to CPL3. Its success
-notification was observed on the PS4 with build `dedeffd`; the USB register
-log is still needed to review the captured values. It is not a Windows launcher.
+notification was observed on the PS4 with build `dedeffd`; build `abe468c`
+subsequently displayed CR0, CR3, CR4 and EFER on-screen. The measured values
+are in the probe documentation. It is not a Windows launcher.
 
 The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
 a privileged backend must establish before any further Boot Manager entry.

@@ -2,8 +2,8 @@
 
 ## What the console traces establish
 
-The current payload runs inside a PS4 user process. It maps Microsoft's
-`bootmgfw.efi` image at `0x40000000`, relocates it, and calls its EFI entry
+Earlier experimental payloads ran inside a PS4 user process. They mapped Microsoft's
+`bootmgfw.efi` image at `0x40000000`, relocated it, and called its EFI entry
 with synthetic Boot and Runtime Services. This successfully produced firmware
 callbacks, including `HandleProtocol` and an `AllocatePages` request for
 `0x102000`. A successful callback shows that those calls ran; it does not
@@ -82,7 +82,8 @@ depends on PS4 user-process syscalls after the transition.
 The [context probe](CONTEXT_PROBE.md) uses the pinned runtime callback facility
 to read CPU state and return. Build `dedeffd` showed a successful return
 notification on the target PS4, following the callback's CPL0 and user-return
-checks. The USB register log still needs review. This callback does not
+checks. Build `abe468c` then showed CR0 `0x8005003B`, CR3 `0x0B28B000`,
+CR4 `0x406F0` and EFER `0xD01` on-screen. This callback does not
 replace the EFI handoff or remove the firmware layer's process dependencies.
 
 ## Remaining implementation

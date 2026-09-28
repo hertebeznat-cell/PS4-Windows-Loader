@@ -4,6 +4,11 @@ Status: design and portable validation only. No kernel backend, privileged entry
 recovery path or Windows boot is implemented by this contract. The published
 Stage 4.8 payload remains preflight only.
 
+The returning hardware context probe observed CR0 `0x8005003B`, CR3
+`0x0B28B000`, CR4 `0x406F0` and EFER `0xD01` in the PS4 kernel callback.
+These establish active long-mode paging and NX at that instant, but do not
+verify the pointed-to tables, mappings, page ownership or a future handoff.
+
 ## Evidence required from a platform backend
 
 1. An independently established physical memory map, including reservations,

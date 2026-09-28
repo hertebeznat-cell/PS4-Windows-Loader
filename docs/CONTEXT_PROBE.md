@@ -17,6 +17,21 @@ drive despite that notification. A successful close does not prove that the
 PS4 mount path is exposed to a PC. New builds also show the four register
 values as on-screen notifications and no longer claim the file is ready.
 
+The follow-up hardware run of build `abe468c` returned and photographed all
+four register notices:
+
+| Register | Observed value | Relevant interpretation |
+| --- | --- | --- |
+| CR0 | `0x000000008005003B` | Paging, protected mode and write protection enabled |
+| CR3 | `0x000000000B28B000` | Active root address at callback time; contents and physical ownership unverified |
+| CR4 | `0x00000000000406F0` | PAE, PGE and OSXSAVE enabled; SMEP/SMAP bits clear |
+| EFER | `0x0000000000000D01` | Long mode active and NX enabled |
+
+These are observations of the existing PS4 kernel context, not a reusable EFI
+handoff. No page-table entries were read, no physical RAM map was established,
+and no Windows code ran in this context. The screenshots do not include the
+`BUILD:` log line, but the register notices are emitted by build `abe468c`.
+
 Host tests cover rejection at CPL3 and mocked transport/error/reporting paths.
 An initial hardware run of build `84d35cb` stopped before the callback: the
 raw payload was relocated, while one C function pointer retained its linked
@@ -56,8 +71,8 @@ the console may reject the call or fault. The probe is not a recovery mechanism.
 
 No Windows files are required for this test. The result records its source
 commit in `BUILD:` and `COMMIT.txt`. The archive contains checksums and callback
-disassembly for review. The next inspection needs the actual register values
-from the on-screen notices or log before using them as input to a platform memory inventory.
+disassembly for review. The photographed register values are now available
+for designing a platform memory inventory; this probe need not be repeated.
 
 ## Log initialization and raw binary packaging
 
