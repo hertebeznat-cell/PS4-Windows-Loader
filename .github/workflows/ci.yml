@@ -48,6 +48,13 @@ jobs:
             -Iloader/include loader/src/handoff.c tests/test_handoff.c \
             -o build/test-handoff
           ./build/test-handoff
+      - name: Test portable PE headers
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iloader/include loader/src/main.c tests/test_pe.c \
+            -o build/test-pe
+          ./build/test-pe
 
   ps4-loader:
     name: Build latest PS4 loader

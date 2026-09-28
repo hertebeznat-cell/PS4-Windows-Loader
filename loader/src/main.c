@@ -77,7 +77,8 @@ pwl_status_t pwl_pe_inspect(const void *data, size_t size, pwl_pe_image_t *image
         return PWL_ERR_UNSUPPORTED;
     }
 
-    if (optional_size < 0x70U || size - (size_t)(coff - bytes) < 24U + optional_size) {
+    if (optional_size < 0x70U ||
+        (size_t)optional_size > size - (size_t)(coff - bytes) - 24U) {
         return PWL_ERR_BAD_IMAGE;
     }
 
@@ -95,7 +96,11 @@ pwl_status_t pwl_pe_inspect(const void *data, size_t size, pwl_pe_image_t *image
     image->preferred_base = read_u64_le(optional + 0x18);
     image->image_size = read_u32_le(optional + 0x38);
 
-    if (image->image_size == 0U) {
+    if (image->image_size == 0U || image->entry_rva >= image->image_size ||
+        read_u32_le(optional + 0x3c) == 0U ||
+        read_u32_le(optional + 0x3c) > image->image_size ||
+        read_u32_le(optional + 0x3c) > size) {
+        memset(image, 0, sizeof(*image));
         return PWL_ERR_BAD_IMAGE;
     }
 
