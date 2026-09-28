@@ -21,6 +21,9 @@
 #define EFI_ALLOCATE_MAX_ADDRESS 1U
 #define EFI_ALLOCATE_ADDRESS     2U
 #define ARENA45_MAX_PAGES        32768U
+#ifndef PS4WL_TRACE_PATH
+#define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE45.LOG"
+#endif
 
 static u8 arena_type45[ARENA45_MAX_PAGES];
 
@@ -334,18 +337,30 @@ static EFI_STATUS EFIAPI get_map45(UINTN*size,EFI_MEMORY_DESCRIPTOR*map,UINTN*ke
 
 static void open_trace45(void)
 {
-    trace_fd43=open("/mnt/usb0/PS4WL_STAGE45.LOG",O_WRONLY|O_CREAT|O_TRUNC,0666);
+    trace_fd43=open(PS4WL_TRACE_PATH,O_WRONLY|O_CREAT|O_TRUNC,0666);
     if(trace_fd43>=0){
+#ifdef PS4WL_STAGE48
+        log45("PS4 Windows Loader Stage 4.8 trace\n");
+        log45("16-KiB low-address backing window and EFI memory map\n");
+#else
         log45("PS4 Windows Loader Stage 4.5 trace\n");
         log45("Executable low-memory arena + UEFI AllocatePages enabled\n");
+#endif
     }
 }
 
+#ifdef PS4WL_STAGE48
+static EFI_STATUS EFIAPI get_map48(UINTN*,EFI_MEMORY_DESCRIPTOR*,UINTN*,UINTN*,u32*);
+#endif
 static void install_stage45_services(void)
 {
     bs32.AllocatePages=alloc_pages45;
     bs32.FreePages=free_pages45;
+#ifdef PS4WL_STAGE48
+    bs32.GetMemoryMap=get_map48;
+#else
     bs32.GetMemoryMap=get_map45;
+#endif
     refresh_crc40();
 }
 
