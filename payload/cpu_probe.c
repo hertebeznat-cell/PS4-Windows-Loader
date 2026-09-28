@@ -15,14 +15,15 @@ typedef unsigned long long u64;
 #endif
 
 static int probe_fd=-1;
+static int probe_write_failed;
 
 static void write_line(const char *line)
 {
     size_t length=0,offset=0;
     while(line[length])++length;
-    while(offset<length){
+    while(offset<length&&!probe_write_failed){
         ssize_t written=write(probe_fd,line+offset,length-offset);
-        if(written<=0)break;
+        if(written<=0){probe_write_failed=1;break;}
         offset+=(size_t)written;
     }
 }
@@ -49,6 +50,6 @@ int main(void)
     write_line("MODE: CPU_ONLY; no EFI or Boot Manager entry\n");
     pwl_probe_cpu(write_line,write_hex);
     write_line("CPU probe finished\n");
-    if(close(probe_fd)!=0)return 2;
+    if(close(probe_fd)!=0||probe_write_failed)return 2;
     return 0;
 }

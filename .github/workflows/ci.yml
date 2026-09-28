@@ -83,6 +83,12 @@ jobs:
             payload/cpu_probe.c -o build/test-cpu-probe
           ./build/test-cpu-probe
           python3 tools/check_cpu_log.py build/CPU-PROBE-TEST.LOG
+          gcc -std=c11 '-DPS4WL_CPU_LOG_PATH="/dev/full"' \
+            payload/cpu_probe.c -o build/test-cpu-write-failure
+          if ./build/test-cpu-write-failure; then
+            echo 'CPU probe did not report a write failure' >&2
+            exit 1
+          fi
       - name: Test PE parser used by latest payload
         run: |
           mkdir -p build
@@ -120,7 +126,7 @@ jobs:
           strings build/latest/PS4WindowsLoader-latest.elf | grep -Fq 'MODE: PREFLIGHT_ONLY; Boot Manager entry disabled'
           strings build/latest/PS4WindowsLoader-latest.elf | grep -Fq 'CPU48: CPUID raw registers begin'
           ls -lh build/latest/PS4WindowsLoader-latest.*
-          sha256sum build/latest/PS4WindowsLoader-latest.bin | tee build/latest/SHA256SUMS.txt
+          (cd build/latest && sha256sum PS4WindowsLoader-latest.bin PS4WindowsLoader-latest.elf > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
           cp PS4_RUNTIME_COMMIT.txt build/latest/
           printf '%s\n' "$LATEST_STAGE" > build/latest/STAGE.txt
           printf '%s\n' "$GITHUB_SHA" > build/latest/COMMIT.txt
@@ -138,7 +144,7 @@ jobs:
             --only-section .bss --only-section .rodata -O binary \
             build/cpu-probe/PS4WindowsLoader-CPU-Probe.bin
           strings build/cpu-probe/PS4WindowsLoader-CPU-Probe.elf | grep -Fq 'MODE: CPU_ONLY; no EFI or Boot Manager entry'
-          sha256sum build/cpu-probe/PS4WindowsLoader-CPU-Probe.bin | tee build/cpu-probe/SHA256SUMS.txt
+          (cd build/cpu-probe && sha256sum PS4WindowsLoader-CPU-Probe.bin PS4WindowsLoader-CPU-Probe.elf > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
           printf '%s\n' "$GITHUB_SHA" > build/cpu-probe/COMMIT.txt
       - name: Upload latest loader
         uses: actions/upload-artifact@v4

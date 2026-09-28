@@ -7,7 +7,9 @@ writes the register values, closes the log and exits. It does not read a Windows
 file, allocate an EFI image, or call Microsoft Boot Manager.
 
 1. Compare the artifact's `COMMIT.txt` with the selected CI run and check
-   `PS4WindowsLoader-CPU-Probe.bin` against `SHA256SUMS.txt`.
+   `PS4WindowsLoader-CPU-Probe.bin` against `SHA256SUMS.txt`. From the unpacked
+   artifact folder, `sha256sum -c SHA256SUMS.txt` checks both the `.bin` and
+   `.elf` files; the manifest lists filenames without CI workspace paths.
 2. With the test USB drive mounted at `/mnt/usb0`, load the CPU probe `.bin`
    using the same payload launcher previously used for this PS4. No
    `bootmgfw.efi` or Windows installation media is needed.

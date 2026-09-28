@@ -19,6 +19,10 @@ FLAGS = (
 
 
 def parse(text):
+    if "MODE: CPU_ONLY; no EFI or Boot Manager entry" in text and (
+        text.splitlines().count("CPU probe finished") != 1
+    ):
+        raise ValueError("standalone CPU probe did not finish")
     if text.count("CPU48: CPUID raw registers begin") != 1 or text.count(
         "CPU48: CPUID raw registers end"
     ) != 1:

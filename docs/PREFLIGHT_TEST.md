@@ -9,7 +9,8 @@ PS4 Slim CUH-2208B. It does **not** start Boot Manager or Windows 11/Server
    `PS4WindowsLoader-latest.bin`, `COMMIT.txt`, `STAGE.txt` and `SHA256SUMS.txt`.
    Check that `STAGE.txt` says `stage4_8` and that `COMMIT.txt` matches the
    intended CI run's commit. Verify the binary against `SHA256SUMS.txt` before
-   copying it to removable test media.
+   copying it to removable test media. In the unpacked artifact folder,
+   `sha256sum -c SHA256SUMS.txt` checks the `.bin` and `.elf` files.
 2. Put your own `bootmgfw.efi` at
    `/mnt/usb0/EFI/Microsoft/Boot/bootmgfw.efi` on the test USB drive. Use the
    same known working payload-launch method as in the prior Stage 4.8 checks.

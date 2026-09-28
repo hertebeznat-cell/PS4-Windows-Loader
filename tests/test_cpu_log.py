@@ -38,6 +38,14 @@ class CpuLogTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse(sample)
 
+    def test_standalone_log_requires_finish_marker(self):
+        sample = "MODE: CPU_ONLY; no EFI or Boot Manager entry\n" + self.log(
+            entry(0, eax=0), entry(0x80000000, eax=0x80000000)
+        )
+        with self.assertRaisesRegex(ValueError, "did not finish"):
+            parse(sample)
+        self.assertIn((0, 0), parse(sample + "\nCPU probe finished\n"))
+
 
 if __name__ == "__main__":
     unittest.main()
