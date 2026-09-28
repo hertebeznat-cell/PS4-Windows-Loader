@@ -7,12 +7,18 @@ existing PS4 runtime call a small resident function at CPL0 and return to the
 user process? It records actual CR0, CR3, CR4 and EFER values only after checking
 CPL0. It does not call Boot Manager or establish a new EFI environment.
 
-This is a new hardware test, not the repeated Stage 4.8 preflight. Host tests
-cover rejection at CPL3 and mocked transport/error/reporting paths. An initial hardware run of build `84d35cb` stopped before the callback: the
+Build `dedeffdd0515187056e155c55b997433e0c3b6db` produced the on-screen
+notification `returned; PS4WL_CONTEXT.LOG ready` on the target PS4. In this
+source version that notification follows a completed callback, CPL0 CS check,
+return to CPL3, successful file close and no detected write error. The
+photographs confirm the final notification; the USB log with the recorded
+register values has not yet been reviewed.
+
+Host tests cover rejection at CPL3 and mocked transport/error/reporting paths.
+An initial hardware run of build `84d35cb` stopped before the callback: the
 raw payload was relocated, while one C function pointer retained its linked
 address. The callback address and extent are now resolved relative to RIP at
-runtime, with a linked-ELF check in CI. The CPL0 path and return remain to be
-verified on the target PS4.
+runtime, with a linked-ELF check in CI.
 
 ## Requirements
 
@@ -45,8 +51,8 @@ the console may reject the call or fault. The probe is not a recovery mechanism.
 
 No Windows files are required for this test. The result records its source
 commit in `BUILD:` and `COMMIT.txt`. The archive contains checksums and callback
-disassembly for review. This result will determine whether the existing runtime
-can supply a returning context for further platform inspection.
+disassembly for review. The next inspection needs the actual register values
+from the USB log before using them as input to a platform memory inventory.
 
 ## Log initialization and raw binary packaging
 

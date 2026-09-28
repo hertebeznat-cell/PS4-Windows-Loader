@@ -80,8 +80,9 @@ depends on PS4 user-process syscalls after the transition.
 ## Returning callback implementation
 
 The [context probe](CONTEXT_PROBE.md) uses the pinned runtime callback facility
-to read CPU state and return. Host tests cover the CPL3 guard and reporting
-failures; target CPL0 execution is pending verification. This callback does not
+to read CPU state and return. Build `dedeffd` showed a successful return
+notification on the target PS4, following the callback's CPL0 and user-return
+checks. The USB register log still needs review. This callback does not
 replace the EFI handoff or remove the firmware layer's process dependencies.
 
 ## Remaining implementation

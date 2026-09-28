@@ -40,6 +40,7 @@ It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 | Allocate a page at the requested `0x00102000` | Succeeded in an earlier Stage 4.8 entry trace |
 | Stage 4.8 aligned 16 KiB backing window | Earlier entry trace mapped it at `0x00100000`; native page size reported as 16 KiB |
 | Current preflight and CPU probe | Both logged identical CPU flags; preflight mapped `bootmgfw.efi` and stopped before entry |
+| Returning CPU context probe | Hardware notification reports that its CPL0 callback completed and returned to CPL3; register values in USB log await review |
 | Execution after the earlier successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
 | Boot Manager loads `winload.efi` / Windows kernel | Not reached |
 
@@ -122,8 +123,9 @@ far less setup and does not read or map a Windows image.
 
 A separate [returning CPU context probe](docs/CONTEXT_PROBE.md) is now built as
 **PS4-Windows-Loader-Context-Probe**. It tests the existing runtime callback,
-records real control registers at CPL0 and checks return to CPL3. Hardware
-verification is pending; it is not a Windows launcher.
+records real control registers at CPL0 and checks return to CPL3. Its success
+notification was observed on the PS4 with build `dedeffd`; the USB register
+log is still needed to review the captured values. It is not a Windows launcher.
 
 The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
 a privileged backend must establish before any further Boot Manager entry.
