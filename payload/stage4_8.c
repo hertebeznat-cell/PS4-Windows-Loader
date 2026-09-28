@@ -11,7 +11,6 @@
  */
 
 #include <signal.h>
-#include <sys/ucontext.h>
 #define PS4WL_STAGE48 1
 #define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE48.LOG"
 #define mmap ps4wl_mmap48
@@ -41,25 +40,45 @@ static int trace48_busy;
 static size_t native_page_size48;
 static int fault48_installed;
 
+static void snapshot48(void)
+{
+    static const u64 offset=0x58660ULL;
+    const u8 *image=(const u8*)loaded32.ImageBase;
+    UINTN i;
+    if(!image||loaded32.ImageSize<offset+32U)return;
+    log45("MMAP48: bootmgfw bytes near previous fault offset\n");
+    log_hex45("MMAP48: image offset=",offset);
+    for(i=0;i<4;i++){
+        u64 word=0;
+        mem_copy(&word,image+offset+i*8U,sizeof(word));
+        log_hex45("MMAP48: image word=",word);
+    }
+}
+
 static void fault48(int signo,siginfo_t *info,void *context)
 {
-    ucontext_t *uc=(ucontext_t*)context;
-    u64 rip=uc?(u64)uc->uc_mcontext.mc_rip:0;
     u64 base=(u64)(unsigned long)loaded32.ImageBase;
+    UINTN i;
     log45("FAULT48: synchronous processor fault\n");
     log_hex45("FAULT48: signal=",(u64)(u32)signo);
+    log_hex45("FAULT48: siginfo ptr=",(u64)(unsigned long)info);
+    log_hex45("FAULT48: context ptr=",(u64)(unsigned long)context);
     if(info){
         log_hex45("FAULT48: code=",(u64)(u32)info->si_code);
         log_hex45("FAULT48: address=",(u64)(unsigned long)info->si_addr);
+        if(base && (u64)(unsigned long)info->si_addr>=base &&
+           (u64)(unsigned long)info->si_addr-base<loaded32.ImageSize)
+            log_hex45("FAULT48: image offset=",(u64)(unsigned long)info->si_addr-base);
     }
-    if(uc){
-        log_hex45("FAULT48: rip=",rip);
-        log_hex45("FAULT48: rsp=",(u64)uc->uc_mcontext.mc_rsp);
-        log_hex45("FAULT48: trap=",(u64)uc->uc_mcontext.mc_trapno);
-        log_hex45("FAULT48: error=",(u64)uc->uc_mcontext.mc_err);
+    if(context){
+        const u64 *words=(const u64*)context;
+        for(i=0;i<32;i++){
+            char label[]="FAULT48: context[00]=";
+            label[17]=(char)('0'+i/10U);
+            label[18]=(char)('0'+i%10U);
+            log_hex45(label,words[i]);
+        }
     }
-    if(base && rip>=base && rip-base<loaded32.ImageSize)
-        log_hex45("FAULT48: bootmgfw image offset=",rip-base);
     /* Do not resume the instruction that faulted. */
     sys_exit(128+signo);
     for(;;){}
@@ -161,6 +180,7 @@ void *ps4wl_mmap48(void *addr,size_t len,int prot,int flags,int fd,off_t off)
         if((u64)(unsigned long)p==WINDOW48_BASE){
             window48_active=1;
             log45("MMAP48: backing window ready; exposing requested page\n");
+            snapshot48();
             return (void*)(unsigned long)TARGET48_ADDR;
         }
         if(p!=(void*)-1)

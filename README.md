@@ -16,8 +16,8 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > [!IMPORTANT]
 > This is boot research, not a working Windows installation. `bootmgfw.efi` has
 > executed on a PS4, but `winload.efi`, the Windows kernel, setup, graphics, and
-> device drivers have **not** been reached. The latest Stage 4.8 trace stops
-> immediately after its low-address allocation succeeds.
+> device drivers have **not** been reached. The latest Stage 4.8 trace records
+> `SIGBUS` immediately after the low-address allocation succeeds.
 
 ## Where it stands
 
@@ -34,18 +34,20 @@ It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 | Return LoadedImage and DevicePath to Boot Manager | Verified in hardware traces |
 | Allocate a page at the requested `0x00102000` | **Succeeded in the latest Stage 4.8 hardware trace** |
 | Stage 4.8 aligned 16 KiB backing window | Mapped at `0x00100000`; native page size confirmed as 16 KiB |
-| Execution after the successful allocation | No subsequent EFI callback or return recorded |
+| Execution after the successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
 | Boot Manager loads `winload.efi` / Windows kernel | Not reached |
 
 Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
 `EFI_NOT_FOUND`, while the latest found the window free and mapped the full
 16 KiB at `0x00100000`. Its `hw.pagesize` query returned `0x4000` (16 KiB).
 `AllocatePages(AllocateAddress, EfiLoaderData, 1, 0x00102000)` then returned
-`EFI_SUCCESS` and the requested address. The log ends there. The cause could
-be a processor fault or a stall after the callback; the current source installs
-handlers for common processor faults and logs the instruction pointer and
-fault address when the OS delivers a signal. This diagnostic revision still
-requires a hardware run.
+`EFI_SUCCESS` and the requested address. The following fault handler recorded
+`SIGBUS`, code `3`, and `siginfo.si_addr=0x40058666`, within the mapped
+`bootmgfw.efi` image at offset `0x58666`. The previous handler's reported
+instruction and stack pointers are unreliable because its context layout does
+not match the signal frame seen on this PS4. The updated diagnostic logs raw
+context words and image bytes near that offset; a new hardware run is needed
+to identify the cause of the fault.
 
 ## Boot path
 
@@ -82,10 +84,11 @@ complete its own BCD processing or start Windows.
    your own test USB volume. These files are not included in this repository.
 3. Run `PS4WindowsLoader-latest.bin` with the PS4 payload method for your test
    console. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`.
-4. Preserve the complete log. A `FAULT48` entry identifies a delivered fault
-   and its instruction pointer. If the log ends after `AP45: result=` without a
-   `FAULT48` line, that alone cannot distinguish a stall from a fault the
-   process could not report.
+4. Preserve the complete log. A `FAULT48` entry records a delivered signal,
+   its reported fault address, and raw context words. The `MMAP48: image word=`
+   lines record nearby bytes of the mapped image. If no `FAULT48` line appears,
+   the log alone cannot distinguish a stall from a fault the process could not
+   report.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.
@@ -102,8 +105,8 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Test the updated Stage 4.8 fault trace to locate the stop after the
-   successful allocation. Never force-map over an occupied page.
+1. Inspect the next Stage 4.8 trace to identify the cause of `SIGBUS` after
+   the successful allocation. Never force-map over an occupied page.
 2. Model a truthful, stable physical memory map and required firmware tables;
    the current process mappings and synthetic EFI descriptors are insufficient
    for a Windows kernel handoff.
