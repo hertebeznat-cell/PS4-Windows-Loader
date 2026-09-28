@@ -63,6 +63,7 @@ jobs:
             -fno-stack-protector -fno-builtin \
             -static -fPIE -ffreestanding \
             -DSTAGE4_1_NO_MAIN=1 \
+            -DSTAGE4_3_NO_MAIN=1 \
             ps4-runtime/lib/lib.a "payload/${LATEST_STAGE}.c" \
             -Wl,-gc-sections \
             -o build/latest/PS4WindowsLoader-latest.elf
