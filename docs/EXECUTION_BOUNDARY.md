@@ -38,7 +38,34 @@ console services, and a defined `ExitBootServices` handoff. Device ownership
 and outstanding DMA must be understood before the host OS is displaced. These
 are design requirements, not features implemented by Stage 4.8.
 
-## Work that can proceed without another console run
+## Portable implementation now available
+
+`loader/src/handoff.c` validates a supplied physical memory map and the
+placement of an image, stack and root page-table page. It rejects overlapping,
+unaligned or overflowing regions, unknown memory, incorrect ownership kinds,
+and entry offsets outside the image. Adjacent regions of the same kind are
+accepted; gaps are never implicitly treated as RAM.
+
+`tests/test_handoff.c` uses synthetic memory regions to exercise valid and
+invalid layouts. CI compiles the module freestanding and runs the tests with
+AddressSanitizer and UndefinedBehaviorSanitizer. These tests do not need a PS4.
+
+This module is not wired into the PS4 payload yet: the payload has no source
+of verified physical-region data. `PWL_OK` means the supplied placement data
+is internally consistent. It does not certify page-table contents, virtual
+addresses, CPU mode, device state, or permission to transfer control.
+
+## Existing transition code: adaptation required
+
+The pinned external runtime includes `linux/ps4-kexec-common/linux_boot.c`
+and `linux_thunk.S`. That path builds Linux boot parameters, changes page
+tables and segments, and transfers to Linux startup. The current CI links
+only the runtime library; it does not build or execute that Linux transition.
+Its argument layout and entry sequence cannot be substituted for an EFI call.
+Adapting it requires a Windows/EFI-specific firmware environment that no longer
+depends on PS4 user-process syscalls after the transition.
+
+## Remaining implementation
 
 1. Separate the portable PE/COFF and EFI-table construction code from calls
    that depend on the live PS4 process. Keep the current preflight as the

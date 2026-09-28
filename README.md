@@ -82,6 +82,9 @@ but neither is currently bootable here. The USB path on that machine is
 - Loaded Image, Device Path, Simple File System, File Protocol and BCD file
   access; baseline events and Runtime Services.
 - Real entry into `bootmgfw.efi` with callback traces to a USB log.
+- Portable physical-memory layout checks with automated tests for overlap,
+  alignment, address overflow and image/stack/page-table placement. This module
+  is not connected to the PS4 payload until verified physical data is available.
 
 These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
@@ -96,6 +99,9 @@ faulting instructions; no further hardware run is needed for them. Do not reuse
 earlier artifacts containing the experimental `CR3` substitution. Microsoft
 boot files are not included in this repository.
 
+New CI artifacts include `COMMIT.txt`; traces include `BUILD:` and an explicit
+`MODE: PREFLIGHT_ONLY` marker. Use these to identify the exact build.
+
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.
 
@@ -108,6 +114,14 @@ commit, builds its freestanding library, compiles the latest payload, and
 publishes `.elf` and `.bin` artifacts. It also compiles the portable core in
 `loader/src/main.c`. Building is a compile check; a PS4 run is required to
 verify firmware behavior.
+
+The portable placement tests run on a desktop without invoking PS4 code:
+
+```sh
+cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iloader/include \
+  loader/src/handoff.c tests/test_handoff.c -o /tmp/test-handoff
+/tmp/test-handoff
+```
 
 ## Next milestones
 

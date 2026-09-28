@@ -24,6 +24,9 @@
 #ifndef PS4WL_TRACE_PATH
 #define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE45.LOG"
 #endif
+#ifndef PS4WL_BUILD_ID
+#define PS4WL_BUILD_ID "local-unversioned"
+#endif
 
 static u8 arena_type45[ARENA45_MAX_PAGES];
 
@@ -341,11 +344,16 @@ static void open_trace45(void)
     if(trace_fd43>=0){
 #ifdef PS4WL_STAGE48
         log45("PS4 Windows Loader Stage 4.8 trace\n");
+#ifdef PS4WL_STAGE48_PREFLIGHT_ONLY
+        log45("MODE: PREFLIGHT_ONLY; Boot Manager entry disabled\n");
+#else
         log45("16-KiB low-address backing window and EFI memory map\n");
+#endif
 #else
         log45("PS4 Windows Loader Stage 4.5 trace\n");
         log45("Executable low-memory arena + UEFI AllocatePages enabled\n");
 #endif
+        log45("BUILD: " PS4WL_BUILD_ID "\n");
     }
 }
 

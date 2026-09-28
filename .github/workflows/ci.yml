@@ -36,6 +36,18 @@ jobs:
           file build/ps4wl-main.o
           llvm-readelf -h build/ps4wl-main.o
           llvm-nm -g build/ps4wl-main.o
+      - name: Compile handoff layout validator
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -ffreestanding -fno-stack-protector -fno-builtin \
+            -Iloader/include -c loader/src/handoff.c -o build/ps4wl-handoff.o
+      - name: Test physical memory placement
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iloader/include loader/src/handoff.c tests/test_handoff.c \
+            -o build/test-handoff
+          ./build/test-handoff
 
   ps4-loader:
     name: Build latest PS4 loader
@@ -64,6 +76,7 @@ jobs:
             -static -fPIE -ffreestanding \
             -DSTAGE4_1_NO_MAIN=1 \
             -DSTAGE4_3_NO_MAIN=1 \
+            "-DPS4WL_BUILD_ID=\"${GITHUB_SHA}\"" \
             ps4-runtime/lib/lib.a "payload/${LATEST_STAGE}.c" \
             -Wl,-gc-sections \
             -o build/latest/PS4WindowsLoader-latest.elf
@@ -82,6 +95,7 @@ jobs:
           sha256sum build/latest/PS4WindowsLoader-latest.bin | tee build/latest/SHA256SUMS.txt
           cp PS4_RUNTIME_COMMIT.txt build/latest/
           printf '%s\n' "$LATEST_STAGE" > build/latest/STAGE.txt
+          printf '%s\n' "$GITHUB_SHA" > build/latest/COMMIT.txt
       - name: Upload latest loader
         uses: actions/upload-artifact@v4
         with:
