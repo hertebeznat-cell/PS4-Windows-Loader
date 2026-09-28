@@ -18,7 +18,8 @@ typedef enum pwl_status {
     PWL_ERR_UNSUPPORTED = -2,
     PWL_ERR_NOT_FOUND = -3,
     PWL_ERR_BAD_IMAGE = -4,
-    PWL_ERR_IO = -5
+    PWL_ERR_IO = -5,
+    PWL_ERR_BUFFER_TOO_SMALL = -6
 } pwl_status_t;
 
 typedef struct pwl_framebuffer {

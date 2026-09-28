@@ -85,6 +85,8 @@ but neither is currently bootable here. The USB path on that machine is
 - Portable physical-memory layout checks with automated tests for overlap,
   alignment, address overflow and image/stack/page-table placement. This module
   is not connected to the PS4 payload until verified physical data is available.
+- Conversion of verified physical regions into UEFI memory descriptors using
+  cacheability supplied by the future platform backend.
 
 These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
@@ -139,6 +141,9 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iloader/include \
 For the longer architecture plan, see [Boot Flow](docs/BOOT_FLOW.md). Historical
 payloads live in [`payload/`](payload/); the CI stage selector determines the
 active source rather than the highest stage filename.
+
+The separate [Windows 11 and Server 2025 readiness matrix](docs/WINDOWS_TARGETS.md)
+tracks Microsoft requirements against evidence available for the target PS4.
 
 ## Licensing and files
 

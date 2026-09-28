@@ -75,3 +75,51 @@ pwl_status_t pwl_handoff_layout_validate(const pwl_phys_region_t *regions,
         return PWL_ERR_INVALID_ARGUMENT;
     return PWL_OK;
 }
+
+_Static_assert(sizeof(pwl_efi_memory_descriptor_t) == 40,
+               "UEFI descriptor must be 40 bytes");
+
+static uint32_t efi_type(pwl_memory_kind_t kind)
+{
+    switch (kind) {
+        case PWL_MEMORY_FREE: return 7;         /* EfiConventionalMemory */
+        case PWL_MEMORY_LOADER_CODE: return 1;  /* EfiLoaderCode */
+        case PWL_MEMORY_LOADER_DATA: return 2;  /* EfiLoaderData */
+        case PWL_MEMORY_MMIO: return 11;        /* EfiMemoryMappedIO */
+        default: return 0;                      /* EfiReservedMemoryType */
+    }
+}
+
+static int known_cacheability(uint64_t attributes)
+{
+    return attributes == 1 || attributes == 2 || attributes == 4 ||
+           attributes == 8 || attributes == 16;
+}
+
+pwl_status_t pwl_efi_descriptors_from_regions(
+    const pwl_phys_region_t *regions, const uint64_t *cacheability,
+    size_t count, pwl_efi_memory_descriptor_t *out, size_t capacity,
+    size_t *count_out)
+{
+    size_t i;
+    if (count_out == NULL || cacheability == NULL ||
+        pwl_memory_map_validate(regions, count) != PWL_OK ||
+        count > SIZE_MAX / sizeof(*out))
+        return PWL_ERR_INVALID_ARGUMENT;
+    for (i = 0; i < count; ++i) {
+        if (!known_cacheability(cacheability[i]))
+            return PWL_ERR_INVALID_ARGUMENT;
+    }
+    *count_out = count;
+    if (out == NULL || capacity < count)
+        return PWL_ERR_BUFFER_TOO_SMALL;
+    for (i = 0; i < count; ++i) {
+        out[i].type = efi_type(regions[i].kind);
+        out[i].padding = 0;
+        out[i].physical_start = regions[i].base;
+        out[i].virtual_start = 0;
+        out[i].number_of_pages = regions[i].length / PWL_PAGE_SIZE;
+        out[i].attribute = cacheability[i];
+    }
+    return PWL_OK;
+}

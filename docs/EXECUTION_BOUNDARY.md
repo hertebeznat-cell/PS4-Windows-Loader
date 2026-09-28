@@ -55,6 +55,12 @@ of verified physical-region data. `PWL_OK` means the supplied placement data
 is internally consistent. It does not certify page-table contents, virtual
 addresses, CPU mode, device state, or permission to transfer control.
 
+The portable descriptor converter also accepts explicit cacheability for each
+verified region. It reports the required descriptor count before writing,
+rejects unsupported or missing attributes, and preserves unknown address gaps.
+It is a checked conversion of evidence supplied by a future backend, not a
+source of physical address information.
+
 ## Existing transition code: adaptation required
 
 The pinned external runtime includes `linux/ps4-kexec-common/linux_boot.c`

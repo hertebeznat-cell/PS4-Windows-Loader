@@ -16,11 +16,35 @@ int main(void)
     const size_t count = sizeof(map) / sizeof(map[0]);
     const pwl_handoff_layout_t good = {0x100000, 0x104000, 0x3000, 0x200,
                                         0x101000, 0x3000};
+    uint64_t cache[] = {8, 8, 8, 8, 8, 1};
+    pwl_efi_memory_descriptor_t descriptors[sizeof(map) / sizeof(map[0])];
+    size_t written = 0;
     pwl_handoff_layout_t bad;
     assert(pwl_memory_map_validate(NULL, count) == PWL_ERR_INVALID_ARGUMENT);
     assert(pwl_memory_map_validate(map, 0) == PWL_ERR_INVALID_ARGUMENT);
     assert(pwl_handoff_layout_validate(map, count, NULL) == PWL_ERR_INVALID_ARGUMENT);
     assert(pwl_handoff_layout_validate(map, count, &good) == PWL_OK);
+    assert(pwl_efi_descriptors_from_regions(map, cache, count, NULL, 0,
+                                             &written) == PWL_ERR_BUFFER_TOO_SMALL);
+    assert(written == count);
+    assert(pwl_efi_descriptors_from_regions(map, cache, count, descriptors,
+                                             count - 1, &written) == PWL_ERR_BUFFER_TOO_SMALL);
+    assert(pwl_efi_descriptors_from_regions(map, cache, count, descriptors,
+                                             count, &written) == PWL_OK);
+    assert(written == count && descriptors[0].type == 0 &&
+           descriptors[0].number_of_pages == 256 &&
+           descriptors[1].type == 2 && descriptors[4].type == 1 &&
+           descriptors[5].type == 7 && descriptors[5].attribute == 1 &&
+           descriptors[4].physical_start == 0x104000 &&
+           descriptors[4].virtual_start == 0 && descriptors[4].padding == 0);
+    cache[5] = 0; /* Cache type is unknown: no fabricated attributes. */
+    assert(pwl_efi_descriptors_from_regions(map, cache, count, descriptors,
+                                             count, &written) == PWL_ERR_INVALID_ARGUMENT);
+    cache[5] = 1;
+    map[4].base = 0x103000; /* Invalid map cannot become EFI descriptors. */
+    assert(pwl_efi_descriptors_from_regions(map, cache, count, descriptors,
+                                             count, &written) == PWL_ERR_INVALID_ARGUMENT);
+    map[4].base = 0x104000;
 
     map[2].base += 0x1000; /* Overlap the following region. */
     assert(pwl_memory_map_validate(map, count) == PWL_ERR_INVALID_ARGUMENT);

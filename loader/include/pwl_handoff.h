@@ -44,4 +44,24 @@ pwl_status_t pwl_handoff_layout_validate(const pwl_phys_region_t *regions,
                                         size_t count,
                                         const pwl_handoff_layout_t *layout);
 
+/* UEFI 2.x EFI_MEMORY_DESCRIPTOR version 1, 40 bytes on x86-64. */
+typedef struct pwl_efi_memory_descriptor {
+    uint32_t type;
+    uint32_t padding;
+    uint64_t physical_start;
+    uint64_t virtual_start;
+    uint64_t number_of_pages;
+    uint64_t attribute;
+} pwl_efi_memory_descriptor_t;
+
+/* Cacheability is supplied by the platform backend for every region.
+ * Only one explicitly known baseline type is accepted per descriptor:
+ * UC=1, WC=2, WT=4, WB=8, UCE=16. This conversion cannot discover it.
+ * count_out is set before capacity is checked, as in a size query.
+ */
+pwl_status_t pwl_efi_descriptors_from_regions(
+    const pwl_phys_region_t *regions, const uint64_t *cacheability,
+    size_t count, pwl_efi_memory_descriptor_t *out, size_t capacity,
+    size_t *count_out);
+
 #endif
