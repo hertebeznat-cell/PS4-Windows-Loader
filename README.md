@@ -19,13 +19,15 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > device drivers have **not** been reached. The latest Stage 4.8 trace records
 > `SIGBUS` immediately after the low-address allocation succeeds. A later
 > experimental build reached another fault, and a console shutdown was reported.
-> Hardware tests are paused pending investigation.
+> The latest build is a limited preflight: it maps `bootmgfw.efi`, logs bytes
+> around the second fault, and returns without calling Microsoft's entry point.
 
 ## Where it stands
 
 The loader runs as a PS4 payload and creates the EFI interfaces needed to call
-Microsoft Boot Manager. It reads `bootmgfw.efi` from USB, maps and relocates the
-PE32+ image, then enters its real EFI entry point with a synthetic system table.
+Microsoft Boot Manager. Earlier hardware traces entered its real EFI entry
+point. The current build reads `bootmgfw.efi` from USB, maps and relocates the
+PE32+ image, logs the bytes at the second fault, and exits before entry.
 It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 
 | Milestone | Result |
@@ -54,8 +56,8 @@ established. The instruction replacement has been removed from `main`.
 The previous handler's reported
 instruction and stack pointers are unreliable because its context layout does
 not match the signal frame seen on this PS4. The diagnostic logs raw context
-words and image bytes near a fault address. Do not run this payload again while
-the console shutdown is under investigation.
+words and image bytes near a fault address. The current preflight does not
+execute Boot Manager.
 
 ## Boot path
 
@@ -83,20 +85,19 @@ These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
 complete its own BCD processing or start Windows.
 
-## Build and trace collection (paused)
+## Build and collect the preflight trace
 
 1. Download the **PS4-Windows-Loader-Latest** artifact from the latest
    [successful CI run](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml).
    Inspect `STAGE.txt` and `SHA256SUMS.txt`; CI builds `payload/stage4_8.c`.
 2. Supply `EFI/Microsoft/Boot/bootmgfw.efi` and `EFI/Microsoft/Boot/BCD` on
    your own test USB volume. These files are not included in this repository.
-3. Hardware runs are paused after the reported shutdown and storage check.
-   Existing Stage 4.8 traces were written to `/mnt/usb0/PS4WL_STAGE48.LOG`.
-4. Preserve the existing complete logs. A `FAULT48` entry records a delivered signal,
-   its reported fault address, raw context words and `FAULT48: image word=`
-   lines near that address. If no `FAULT48` line appears,
-   the log alone cannot distinguish a stall from a fault the process could not
-   report.
+3. If the console is healthy and you choose to run this limited build, launch
+   `PS4WindowsLoader-latest.bin`. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`
+   and exits before entering Boot Manager.
+4. Preserve the complete log, especially `PREFLIGHT48: image word=` lines.
+   Their starting offset is printed alongside them. Do not reuse earlier
+   artifacts containing the experimental `CR3` substitution.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.
@@ -113,7 +114,8 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Investigate the reported console shutdown before resuming hardware tests.
+1. Analyze the second fault's instruction using the preflight byte trace;
+   investigate the reported console shutdown before resuming Boot Manager entry.
    Never force-map over an occupied page.
 2. Model a truthful, stable physical memory map and required firmware tables;
    the current process mappings and synthetic EFI descriptors are insufficient

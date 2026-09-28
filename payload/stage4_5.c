@@ -418,6 +418,13 @@ int main(void)
     log_hex45("ENTRY45: DeviceHandle=",(u64)(unsigned long)&device_handle32);
     log_hex45("ENTRY45: ImageBase=",(u64)(unsigned long)image);
     log_hex45("ENTRY45: bootmgfw entry=",(u64)(unsigned long)entry);
+#ifdef PS4WL_STAGE48_PREFLIGHT_ONLY
+    inspect_bootmgfw48();
+    if(trace_fd43>=0)close(trace_fd43);
+    free_pages45(imgaddr,pages);munmap(file,(size_t)READ_CAP);
+    munmap(arena32,(size_t)(arena_pages40*EFI_PAGE_SIZE));
+    return 0;
+#endif
     log45("ENTRY45: entering Microsoft bootmgfw.efi\n");
     notify("Stage 4.5: ENTERING Microsoft bootmgfw.efi NOW");
 

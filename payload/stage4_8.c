@@ -12,7 +12,9 @@
 
 #include <signal.h>
 #define PS4WL_STAGE48 1
+#define PS4WL_STAGE48_PREFLIGHT_ONLY 1
 #define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE48.LOG"
+static void inspect_bootmgfw48(void);
 #define mmap ps4wl_mmap48
 #define munmap ps4wl_munmap48
 #include "stage4_5.c"
@@ -39,6 +41,25 @@ static int window48_active;
 static int trace48_busy;
 static size_t native_page_size48;
 static int fault48_installed;
+
+static void inspect_bootmgfw48(void)
+{
+    const u8 *image=(const u8*)loaded32.ImageBase;
+    static const u64 start=0x285430ULL;
+    UINTN i;
+    log45("PREFLIGHT48: image mapped; Boot Manager entry disabled\n");
+    log_hex45("PREFLIGHT48: image size=",loaded32.ImageSize);
+    if(!image||loaded32.ImageSize<start+64U){
+        log45("PREFLIGHT48: second fault offset outside image\n");
+        return;
+    }
+    log_hex45("PREFLIGHT48: bytes start offset=",start);
+    for(i=0;i<8;i++){
+        u64 word=0;
+        mem_copy(&word,image+start+i*8U,sizeof(word));
+        log_hex45("PREFLIGHT48: image word=",word);
+    }
+}
 
 static void snapshot48(void)
 {
