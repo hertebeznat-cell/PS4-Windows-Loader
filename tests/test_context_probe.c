@@ -5,9 +5,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
 
 static int test_errno, fail_lock, lock_count, unlock_count, sync_failure;
 static int callback_mode, callback_calls;
+static int open_calls, fail_open_count, full_device;
+static char last_notice[256];
+static void test_notify(const char *message);
+static int test_open(const char *path, int flags, ...);
 static int test_mlock(const void *p, size_t n);
 static int test_munlock(const void *p, size_t n);
 static int test_fsync(int fd);
@@ -19,14 +24,30 @@ static int test_kexec(void (*callback)(void), void *argument);
 #define fsync test_fsync
 #define kexec test_kexec
 #define main context_probe_main
+#define open test_open
+#define PS4WL_CONTEXT_NOTIFY test_notify
 #define PS4WL_CONTEXT_LOG_PATH "build/CONTEXT-TEST.LOG"
+#define PS4WL_CONTEXT_LOG_PATH_ALT "build/CONTEXT-TEST-ALT.LOG"
 #include "../payload/context_probe.c"
+#undef open
 #undef main
 #undef kexec
 #undef fsync
 #undef munlock
 #undef mlock
 #undef errno
+
+static void test_notify(const char *message)
+{
+    snprintf(last_notice, sizeof(last_notice), "%s", message);
+}
+static int test_open(const char *path, int flags, ...)
+{
+    ++open_calls;
+    if (open_calls <= fail_open_count) { test_errno = 2; return -1; }
+    if (full_device) return open("/dev/full", O_WRONLY);
+    return open(path, flags, 0666);
+}
 
 static int test_mlock(const void *p, size_t n)
 {
@@ -59,7 +80,10 @@ static void reset(void)
 {
     fail_lock = lock_count = unlock_count = sync_failure = 0;
     callback_mode = callback_calls = 0;
-    write_failed = 0;
+    open_calls = fail_open_count = 0;
+    full_device = 0;
+    last_notice[0] = 0;
+    write_failed = 99; /* Reused raw payload memory must not suppress logging. */
 }
 static int log_contains(const char *needle)
 {
@@ -82,8 +106,9 @@ int main(void)
     assert(context_probe_main() == 1);
     assert(callback_calls == 0 && unlock_count == 1);
     reset(); sync_failure = 1;
-    assert(context_probe_main() == 1);
-    assert(callback_calls == 0 && unlock_count == 2);
+    assert(context_probe_main() == 2);
+    assert(callback_calls == 0 && unlock_count == 0);
+    assert(strstr(last_notice, "flush failed") != NULL);
     reset();
     assert(context_probe_main() == 1);
     assert(callback_calls == 1 && unlock_count == 2);
@@ -98,5 +123,26 @@ int main(void)
     reset(); callback_mode = 2;
     assert(context_probe_main() == 0);
     assert(log_contains("reads and user return observed; EFI handoff unverified"));
+    reset(); fail_open_count = 2;
+    assert(context_probe_main() == 1);
+    assert(callback_calls == 0 && lock_count == 0 && open_calls == 2);
+    assert(strcmp(last_notice, "PS4WL Context: USB0 open errno=00000002; USB1=00000002 (hex)") == 0);
+    reset(); full_device = 1;
+    assert(context_probe_main() == 2);
+    assert(callback_calls == 0 && lock_count == 0);
+    assert(strstr(last_notice, "write/flush failed") != NULL);
+    reset(); fail_open_count = 1; callback_mode = 2;
+    assert(context_probe_main() == 0);
+    assert(open_calls == 2 && callback_calls == 1);
+    {
+        char contents[4096];
+        FILE *fp = fopen(PS4WL_CONTEXT_LOG_PATH_ALT, "rb");
+        size_t n;
+        assert(fp != NULL);
+        n = fread(contents, 1, sizeof(contents) - 1, fp);
+        contents[n] = 0;
+        fclose(fp);
+        assert(strstr(contents, "LOG: " PS4WL_CONTEXT_LOG_PATH_ALT) != NULL);
+    }
     return 0;
 }

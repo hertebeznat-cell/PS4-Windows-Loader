@@ -14,6 +14,41 @@
 #ifndef PS4WL_CONTEXT_LOG_PATH
 #define PS4WL_CONTEXT_LOG_PATH "/mnt/usb0/PS4WL_CONTEXT.LOG"
 #endif
+#ifndef PS4WL_CONTEXT_LOG_PATH_ALT
+#define PS4WL_CONTEXT_LOG_PATH_ALT "/mnt/usb1/PS4WL_CONTEXT.LOG"
+#endif
+
+#ifndef PS4WL_CONTEXT_NOTIFY
+void *dlopen(const char *path, int mode);
+void *dlsym(void *handle, const char *name);
+static void context_notify(const char *message)
+{
+    typedef int (*notify_fn)(int, const char *);
+    size_t length = 0;
+    while (message[length]) ++length;
+    write(1, message, length);
+    write(1, "\n", 1);
+    void *module = dlopen("/system/common/lib/libSceSysUtil.sprx", 0);
+    notify_fn fn = (notify_fn)0;
+    if (!module) module = dlopen("libSceSysUtil.sprx", 0);
+    if (module) fn = (notify_fn)dlsym(module, "sceSysUtilSendSystemNotificationWithText");
+    if (fn) fn(222, message);
+}
+#define PS4WL_CONTEXT_NOTIFY context_notify
+#endif
+
+static void notify_open_failure(unsigned first, unsigned second)
+{
+    char message[] = "PS4WL Context: USB0 open errno=00000000; USB1=00000000 (hex)";
+    const char digits[] = "0123456789ABCDEF";
+    unsigned i;
+    /* Fixed-width codes remain usable even when file logging is unavailable. */
+    for (i = 0; i < 8; ++i) {
+        message[31 + i] = digits[(first >> (28 - 4 * i)) & 15];
+        message[46 + i] = digits[(second >> (28 - 4 * i)) & 15];
+    }
+    PS4WL_CONTEXT_NOTIFY(message);
+}
 
 extern int kexec(void (*callback)(void), void *argument);
 extern int errno;
@@ -54,8 +89,12 @@ static unsigned current_ring(void)
 int main(void)
 {
     int rc, saved_errno, result = 1, data_locked = 0, code_locked = 0;
+    int primary_errno = 0, alternate = 0;
     unsigned long code_address, end_address;
     size_t code_size;
+    /* A raw payload may be launched into reused storage, without ELF startup. */
+    log_fd = -1;
+    write_failed = 0;
     /* The payload sender loads a raw .bin at a runtime address. The static
      * linker's address for a function pointer is invalid after that move.
      * Resolve both symbols relative to RIP at runtime instead.
@@ -64,10 +103,33 @@ int main(void)
     __asm__ volatile("leaq pwl_context_capture_end(%%rip), %0" : "=r"(end_address));
     code_size = end_address > code_address ? end_address - code_address : 0;
     log_fd = open(PS4WL_CONTEXT_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (log_fd < 0) return 1;
+    if (log_fd < 0) {
+        primary_errno = errno;
+        log_fd = open(PS4WL_CONTEXT_LOG_PATH_ALT, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        alternate = 1;
+    }
+    if (log_fd < 0) {
+        saved_errno = errno;
+        notify_open_failure((unsigned)primary_errno, (unsigned)saved_errno);
+        return 1;
+    }
     log_line("PS4 Windows Loader returning context probe\n");
     log_line("BUILD: " PS4WL_BUILD_ID "\n");
     log_line("MODE: CONTEXT_READ_ONLY; no EFI entry\n");
+    if (alternate) {
+        log_line("LOG: " PS4WL_CONTEXT_LOG_PATH_ALT "\n");
+        log_hex("CONTEXT: USB0 open errno=", (unsigned)primary_errno);
+    } else log_line("LOG: " PS4WL_CONTEXT_LOG_PATH "\n");
+    log_hex("CONTEXT: callback address=", code_address);
+    log_hex("CONTEXT: callback bytes=", code_size);
+    /* Preserve startup evidence before either mlock or the runtime callback. */
+    if (write_failed || fsync(log_fd) != 0) {
+        PS4WL_CONTEXT_NOTIFY("PS4WL Context: log write/flush failed; callback not attempted");
+        close(log_fd);
+        return 2;
+    }
+    if (alternate) PS4WL_CONTEXT_NOTIFY("PS4WL Context: log on USB1; preparing callback");
+    else PS4WL_CONTEXT_NOTIFY("PS4WL Context: log on USB0; preparing callback");
     log_hex("CONTEXT: caller CPL=", current_ring());
     if (current_ring() != 3) {
         log_line("RESULT: unexpected caller context; callback not attempted\n");
@@ -129,5 +191,8 @@ done:
     if (code_locked) munlock((const void *)code_address, code_size);
     if (data_locked) munlock((const void *)&pwl_context_result, sizeof(pwl_context_result));
     if (close(log_fd) != 0 || write_failed) result = 2;
+    if (result == 0) PS4WL_CONTEXT_NOTIFY("PS4WL Context: returned; PS4WL_CONTEXT.LOG ready");
+    else if (result == 2) PS4WL_CONTEXT_NOTIFY("PS4WL Context: log I/O failed; callback result may be missing");
+    else PS4WL_CONTEXT_NOTIFY("PS4WL Context: stopped; read PS4WL_CONTEXT.LOG");
     return result;
 }

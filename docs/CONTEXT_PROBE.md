@@ -21,7 +21,8 @@ verified on the target PS4.
   payload code/data from that callback. This probe does not install the facility
   or apply firmware patches. Presence of a callable symbol in a binary does
   not prove the console has the corresponding runtime facility.
-- USB storage available as `/mnt/usb0`, writable and supporting log flush.
+- USB storage available as `/mnt/usb0` or `/mnt/usb1`, writable and supporting
+  log flush. The probe tries USB0 first, then USB1 if opening the file fails.
 - Successful `mlock` of callback code and snapshot storage; failure aborts
   before the callback. Residency does not establish physical ownership or
   independently validate the runtime implementation.
@@ -36,12 +37,30 @@ the console may reject the call or fault. The probe is not a recovery mechanism.
 1. Download **PS4-Windows-Loader-Context-Probe** from the successful Actions run.
 2. Extract the archive and launch `PS4WindowsLoader-Context-Probe.bin` using the
    existing payload sender. Do not rename it to the Stage 4.8 payload.
-3. After it returns, collect `/mnt/usb0/PS4WL_CONTEXT.LOG`.
+3. Watch the on-screen notification: it identifies USB0 or USB1, reports
+   open errors with their errno values, or reports a write/flush failure.
+4. After it returns, collect `PS4WL_CONTEXT.LOG` from the selected USB drive.
+   If no file appears, capture the notification and the payload sender result.
+   An absent file does not establish whether the payload was started.
 
 No Windows files are required for this test. The result records its source
 commit in `BUILD:` and `COMMIT.txt`. The archive contains checksums and callback
 disassembly for review. This result will determine whether the existing runtime
 can supply a returning context for further platform inspection.
+
+## Log initialization and raw binary packaging
+
+A hardware report for build `12870df` said no log was found; the exact cause
+was not established. Inspection found that its `.bin` omitted the ELF `.bss`
+bytes and its write-error flag depended on initially zero memory. The updated
+packaging serializes zeroed BSS into the raw image and checks every shipped
+code/data section against the ELF. The probe also resets its logging state
+on every invocation, including runs in reused payload storage.
+
+The header is written and flushed before memory locking or runtime entry.
+A failed log open or write/flush is reported via the same system notification
+mechanism as the existing Stage 1 payload, with stdout as an additional channel.
+The callback is not attempted if file logging cannot be established.
 
 ## Read the result
 
@@ -78,3 +97,7 @@ References: pinned runtime commit
 `f70f43a60a973b3662daeb29c1f115d95408db93`, `lib/syscalls.py`,
 `linux/main-aio.c`; AMD64 Architecture Programmer's Manual,
 [Volume 2, System Programming](https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24593.pdf).
+
+The reporting tests also cover stale write-error state, failure of both USB
+paths, successful USB1 fallback, and a full log device. The packaging check
+rejects raw images that omit or alter BSS initialization bytes.
