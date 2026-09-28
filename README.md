@@ -16,10 +16,10 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > [!IMPORTANT]
 > This is boot research, not a working Windows installation. `bootmgfw.efi` has
 > executed on a PS4, but `winload.efi`, the Windows kernel, setup, graphics, and
-> device drivers have **not** been reached. The latest Stage 4.8 trace records
-> `SIGBUS` immediately after the low-address allocation succeeds. A later
-> experimental build reached another fault, and a console shutdown was reported.
-> The latest build is a limited preflight: it maps `bootmgfw.efi` and returns
+> device drivers have **not** been reached. Earlier Stage 4.8 entry runs
+> recorded `SIGBUS` after a low-address allocation and after an experimental
+> instruction substitution; a console shutdown was reported after the latter.
+> The current build is a limited preflight: it maps `bootmgfw.efi` and returns
 > without calling Microsoft's entry point. The second fault's bytes are already
 > present in the collected trace; no additional console run is needed.
 
@@ -37,13 +37,14 @@ It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 | EFI tables, Boot/Runtime Services, filesystem and BCD bridge | Self-tests passed on hardware |
 | Enter Microsoft's `bootmgfw.efi` | Verified on hardware |
 | Return LoadedImage and DevicePath to Boot Manager | Verified in hardware traces |
-| Allocate a page at the requested `0x00102000` | **Succeeded in the latest Stage 4.8 hardware trace** |
-| Stage 4.8 aligned 16 KiB backing window | Mapped at `0x00100000`; native page size confirmed as 16 KiB |
-| Execution after the successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
+| Allocate a page at the requested `0x00102000` | Succeeded in an earlier Stage 4.8 entry trace |
+| Stage 4.8 aligned 16 KiB backing window | Earlier entry trace mapped it at `0x00100000`; native page size reported as 16 KiB |
+| Current preflight and CPU probe | Both logged identical CPU flags; preflight mapped `bootmgfw.efi` and stopped before entry |
+| Execution after the earlier successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
 | Boot Manager loads `winload.efi` / Windows kernel | Not reached |
 
-Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
-`EFI_NOT_FOUND`, while the latest found the window free and mapped the full
+Earlier entry runs varied: one Stage 4.8 run found `0x00100000` occupied and returned
+`EFI_NOT_FOUND`, while another found the window free and mapped the full
 16 KiB at `0x00100000`. Its `hw.pagesize` query returned `0x4000` (16 KiB).
 `AllocatePages(AllocateAddress, EfiLoaderData, 1, 0x00102000)` then returned
 `EFI_SUCCESS` and the requested address. The following fault handler recorded
