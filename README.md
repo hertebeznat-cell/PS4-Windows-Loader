@@ -91,6 +91,8 @@ but neither is currently bootable here. The USB path on that machine is
   section bounds, executable entry placement, and image extents. CI exercises
   the active parser against malformed synthetic images before building the
   latest payload.
+- The active relocation mapper validates every relocation block before changing
+  image bytes and rejects malformed block sizes and self-modifying directories.
 
 These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can

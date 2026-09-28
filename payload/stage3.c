@@ -183,7 +183,7 @@ struct pe_info {
 
 static int inspect_pe(const u8 *data,size_t size,struct pe_info *pe)
 {
-    u32 peoff; const u8 *coff,*opt; u16 opt_size,section_count; size_t table_size,section_offset; u16 i; int executable_entry=0;
+    u32 peoff; const u8 *coff,*opt; u16 opt_size,section_count; size_t table_size,section_offset; u16 i,j; int executable_entry=0;
     if(!data||!pe||size<0x80U)return-1;
     if(data[0]!='M'||data[1]!='Z')return-2;
     peoff=u32le(data+0x3c);
@@ -216,6 +216,13 @@ static int inspect_pe(const u8 *data,size_t size,struct pe_info *pe)
         u32 mapped=vsize>raw?vsize:raw;
         if(va>pe->image_size||mapped>pe->image_size-va)return-15;
         if(raw&&((size_t)ptr>size||(size_t)raw>size-(size_t)ptr))return-16;
+        if(mapped&&va<pe->headers_size)return-19;
+        for(j=0;j<i&&mapped;j++){
+            const u8 *prev=pe->sections+(size_t)j*40U;
+            u32 old_va=u32le(prev+12),old_virtual=u32le(prev+8),old_raw=u32le(prev+16);
+            u32 old_size=old_virtual>old_raw?old_virtual:old_raw;
+            if(old_size&&va<old_va+old_size&&old_va<va+mapped)return-20;
+        }
         if(pe->entry_rva>=va&&pe->entry_rva-va<mapped&&
            (u32le(sh+36)&0x20000000U))executable_entry=1;
     }
@@ -243,24 +250,30 @@ static int map_sections(const u8 *file,size_t file_size,const struct pe_info *pe
 
 static int apply_relocs(u8 *image,const struct pe_info *pe)
 {
-    u64 mapped=(u64)(unsigned long)image; s64 delta=(s64)(mapped-pe->image_base); u32 pos=0;
+    u64 mapped=(u64)(unsigned long)image,delta=mapped-pe->image_base; u32 pos; int pass;
     if(!delta)return 0;
     if(!pe->reloc_rva||!pe->reloc_size)return-1;
     if((u64)pe->reloc_rva+pe->reloc_size>pe->image_size)return-2;
-    while(pos<pe->reloc_size) {
-        u8 *blk; u32 page,bsz,count,j;
-        if(pe->reloc_size-pos<8U)return-3;
-        blk=image+pe->reloc_rva+pos; page=u32le(blk); bsz=u32le(blk+4);
-        if(bsz<8U||bsz>pe->reloc_size-pos)return-4;
-        count=(bsz-8U)/2U;
-        for(j=0;j<count;j++) {
-            u16 e=u16le(blk+8U+j*2U),type=(u16)(e>>12),off=(u16)(e&0x0fffU); u64 rva=(u64)page+off;
-            if(type==IMAGE_REL_BASED_ABSOLUTE)continue;
-            if(type!=IMAGE_REL_BASED_DIR64)return-5;
-            if(rva+8ULL>pe->image_size)return-6;
-            put_u64le(image+(size_t)rva,(u64)((s64)u64le(image+(size_t)rva)+delta));
+    /* Validate the entire directory before changing a single image byte. */
+    for(pass=0;pass<2;pass++) {
+        pos=0;
+        while(pos<pe->reloc_size) {
+            u8 *blk; u32 page,bsz,count,j;
+            if(pe->reloc_size-pos<8U)return-3;
+            blk=image+pe->reloc_rva+pos; page=u32le(blk); bsz=u32le(blk+4);
+            if(bsz<8U||bsz>pe->reloc_size-pos||(bsz&1U)||(page&0xfffU))return-4;
+            count=(bsz-8U)/2U;
+            for(j=0;j<count;j++) {
+                u16 e=u16le(blk+8U+j*2U),type=(u16)(e>>12),off=(u16)(e&0x0fffU); u64 rva=(u64)page+off;
+                if(type==IMAGE_REL_BASED_ABSOLUTE)continue;
+                if(type!=IMAGE_REL_BASED_DIR64)return-5;
+                if(rva+8ULL>pe->image_size)return-6;
+                if(rva<(u64)pe->reloc_rva+pe->reloc_size&&
+                   (u64)pe->reloc_rva<rva+8ULL)return-7;
+                if(pass)put_u64le(image+(size_t)rva,u64le(image+(size_t)rva)+delta);
+            }
+            pos+=bsz;
         }
-        pos+=bsz;
     }
     return 0;
 }

@@ -8,7 +8,7 @@ static void set32(u8 *p,u32 value){set16(p,(u16)value);set16(p+2,(u16)(value>>16
 
 int main(void)
 {
-    u8 file[0x400]={0};struct pe_info pe;
+    u8 file[0x400]={0},image[0x3000]={0};struct pe_info pe;
     const size_t off=0x80U,opt=off+24U,sh=opt+0xb0U;
     file[0]='M';file[1]='Z';set32(file+0x3c,(u32)off);
     file[off]='P';file[off+1]='E';set16(file+off+4,IMAGE_FILE_MACHINE_AMD64);
@@ -42,5 +42,29 @@ int main(void)
     if(inspect_pe(file,sizeof(file),&pe)==0)return 7;
     set32(file+opt+0x98,0);set32(file+opt+0x9c,0);
     if(inspect_pe(file,sizeof(file),&pe)!=0)return 8;
+    set16(file+off+6,2);
+    set32(file+sh+40U+8U,0x100U);
+    set32(file+sh+40U+12U,0x1100U);
+    if(inspect_pe(file,sizeof(file),&pe)==0)return 14; /* Overlapping sections. */
+    set32(file+sh+40U+12U,0x1200U);
+    if(inspect_pe(file,sizeof(file),&pe)!=0)return 15; /* Adjacent sections. */
+    set16(file+off+6,1);
+    if(inspect_pe(file,sizeof(file),&pe)!=0)return 16;
+    /* A later malformed block must not partially relocate an earlier one. */
+    pe.image_size=sizeof(image);
+    pe.reloc_rva=0x1800U;
+    pe.reloc_size=20U;
+    pe.image_base=(u64)(unsigned long)image+0x2000U;
+    put_u64le(image+0x1000U,pe.image_base+0x1000U);
+    set32(image+0x1800U,0x1000U);set32(image+0x1804U,12U);
+    set16(image+0x1808U,(u16)(IMAGE_REL_BASED_DIR64<<12));
+    set32(image+0x180cU,0x2000U);set32(image+0x1810U,9U);
+    if(apply_relocs(image,&pe)==0)return 9;
+    if(u64le(image+0x1000U)!=pe.image_base+0x1000U)return 10;
+    set32(image+0x1810U,8U);
+    if(apply_relocs(image,&pe)!=0)return 11;
+    if(u64le(image+0x1000U)!=(u64)(unsigned long)image+0x1000U)return 12;
+    set16(image+0x1808U,(u16)((IMAGE_REL_BASED_DIR64<<12)|0x800U));
+    if(apply_relocs(image,&pe)==0)return 13; /* Relocation list cannot edit itself. */
     return 0;
 }
