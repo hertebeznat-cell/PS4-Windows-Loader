@@ -183,7 +183,7 @@ struct pe_info {
 
 static int inspect_pe(const u8 *data,size_t size,struct pe_info *pe)
 {
-    u32 peoff; const u8 *coff,*opt; u16 opt_size,section_count; size_t table_size;
+    u32 peoff; const u8 *coff,*opt; u16 opt_size,section_count; size_t table_size,section_offset; u16 i; int executable_entry=0;
     if(!data||!pe||size<0x80U)return-1;
     if(data[0]!='M'||data[1]!='Z')return-2;
     peoff=u32le(data+0x3c);
@@ -208,6 +208,20 @@ static int inspect_pe(const u8 *data,size_t size,struct pe_info *pe)
     if(!pe->image_size||pe->image_size>MAX_IMAGE_SIZE)return-11;
     if(!pe->headers_size||pe->headers_size>pe->image_size||pe->headers_size>size)return-12;
     if(pe->entry_rva>=pe->image_size)return-13;
+    section_offset=(size_t)(pe->sections-data);
+    if(section_offset>pe->headers_size||table_size>pe->headers_size-section_offset)return-14;
+    for(i=0;i<section_count;i++){
+        const u8 *sh=pe->sections+(size_t)i*40U;
+        u32 vsize=u32le(sh+8),va=u32le(sh+12),raw=u32le(sh+16),ptr=u32le(sh+20);
+        u32 mapped=vsize>raw?vsize:raw;
+        if(va>pe->image_size||mapped>pe->image_size-va)return-15;
+        if(raw&&((size_t)ptr>size||(size_t)raw>size-(size_t)ptr))return-16;
+        if(pe->entry_rva>=va&&pe->entry_rva-va<mapped&&
+           (u32le(sh+36)&0x20000000U))executable_entry=1;
+    }
+    if(!executable_entry)return-17;
+    if(pe->reloc_size&&(!pe->reloc_rva||pe->reloc_rva>pe->image_size||
+       pe->reloc_size>pe->image_size-pe->reloc_rva))return-18;
     return 0;
 }
 

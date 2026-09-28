@@ -73,6 +73,15 @@ jobs:
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
       - name: Build PS4 freestanding runtime
         run: make -C ps4-runtime/lib
+      - name: Test PE parser used by latest payload
+        run: |
+          mkdir -p build
+          gcc -std=c11 -ffunction-sections -fdata-sections \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -isystem ps4-runtime/freebsd-headers \
+            -Wl,--gc-sections tests/test_stage_pe.c \
+            -o build/test-stage-pe
+          ./build/test-stage-pe
       - name: Build latest loader
         run: |
           mkdir -p build/latest
