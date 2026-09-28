@@ -54,8 +54,15 @@ static unsigned current_ring(void)
 int main(void)
 {
     int rc, saved_errno, result = 1, data_locked = 0, code_locked = 0;
-    size_t code_size = (size_t)((unsigned long)pwl_context_capture_end -
-                              (unsigned long)pwl_context_capture);
+    unsigned long code_address, end_address;
+    size_t code_size;
+    /* The payload sender loads a raw .bin at a runtime address. The static
+     * linker's address for a function pointer is invalid after that move.
+     * Resolve both symbols relative to RIP at runtime instead.
+     */
+    __asm__ volatile("leaq pwl_context_capture(%%rip), %0" : "=r"(code_address));
+    __asm__ volatile("leaq pwl_context_capture_end(%%rip), %0" : "=r"(end_address));
+    code_size = end_address > code_address ? end_address - code_address : 0;
     log_fd = open(PS4WL_CONTEXT_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (log_fd < 0) return 1;
     log_line("PS4 Windows Loader returning context probe\n");
@@ -81,7 +88,7 @@ int main(void)
         goto done;
     }
     data_locked = 1;
-    if (mlock((const void *)(unsigned long)pwl_context_capture, code_size) != 0) {
+    if (mlock((const void *)code_address, code_size) != 0) {
         saved_errno = errno;
         log_line("RESULT: callback mlock failed; callback not attempted\n");
         log_hex("CONTEXT: errno=", (unsigned)saved_errno);
@@ -98,7 +105,7 @@ int main(void)
         goto done;
     }
     errno = 0;
-    rc = kexec(pwl_context_capture, (void *)0);
+    rc = kexec((void (*)(void))code_address, (void *)0);
     saved_errno = errno;
     log_line("CONTEXT: runtime call returned\n");
     log_hex("CONTEXT: return code=", (unsigned long long)(long long)rc);
@@ -119,7 +126,7 @@ int main(void)
     log_line("RESULT: privileged reads and user return observed; EFI handoff unverified\n");
     result = 0;
 done:
-    if (code_locked) munlock((const void *)(unsigned long)pwl_context_capture, code_size);
+    if (code_locked) munlock((const void *)code_address, code_size);
     if (data_locked) munlock((const void *)&pwl_context_result, sizeof(pwl_context_result));
     if (close(log_fd) != 0 || write_failed) result = 2;
     return result;

@@ -189,6 +189,8 @@ jobs:
           objdump -d --disassemble=pwl_context_capture \
             build/context-probe/PS4WindowsLoader-Context-Probe.elf \
             > build/context-probe/CALLBACK-DISASSEMBLY.txt
+          python3 tools/check_context_link.py \
+            build/context-probe/PS4WindowsLoader-Context-Probe.elf
           (cd build/context-probe && sha256sum PS4WindowsLoader-Context-Probe.bin PS4WindowsLoader-Context-Probe.elf > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
           cp PS4_RUNTIME_COMMIT.txt build/context-probe/
           cp docs/CONTEXT_PROBE.md build/context-probe/README.md

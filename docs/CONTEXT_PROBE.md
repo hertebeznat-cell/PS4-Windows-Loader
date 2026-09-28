@@ -8,8 +8,11 @@ user process? It records actual CR0, CR3, CR4 and EFER values only after checkin
 CPL0. It does not call Boot Manager or establish a new EFI environment.
 
 This is a new hardware test, not the repeated Stage 4.8 preflight. Host tests
-cover rejection at CPL3 and mocked transport/error/reporting paths. The CPL0
-path and return have **not yet been verified on the target PS4**.
+cover rejection at CPL3 and mocked transport/error/reporting paths. An initial hardware run of build `84d35cb` stopped before the callback: the
+raw payload was relocated, while one C function pointer retained its linked
+address. The callback address and extent are now resolved relative to RIP at
+runtime, with a linked-ELF check in CI. The CPL0 path and return remain to be
+verified on the target PS4.
 
 ## Requirements
 
@@ -61,7 +64,8 @@ EFI callbacks still depend on the user process and its system calls.
 - `payload/context_capture.S`: 105-byte returning callback; checks CS before
   `MOV CRn` / `RDMSR`, reads EFER at `0xC0000080`, preserves callee-saved
   registers and stack, and writes only the payload's snapshot.
-- `payload/context_probe.c`: user-process preparation, memory residency,
+- `payload/context_probe.c`: user-process preparation, relocation-aware callback
+  address resolution, memory residency,
   log flush, runtime invocation and result reporting. File I/O happens outside
   the callback. All locks are released on ordinary exit paths.
 - `tests/test_context_capture.c`: executes the real callback at CPL3 and checks
