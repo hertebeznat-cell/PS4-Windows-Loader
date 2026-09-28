@@ -11,6 +11,8 @@ static int test_errno, fail_lock, lock_count, unlock_count, sync_failure;
 static int callback_mode, callback_calls;
 static int open_calls, fail_open_count, full_device;
 static char last_notice[256];
+static char notices[12][256];
+static unsigned notice_count;
 static void test_notify(const char *message);
 static int test_open(const char *path, int flags, ...);
 static int test_mlock(const void *p, size_t n);
@@ -40,6 +42,8 @@ static int test_kexec(void (*callback)(void), void *argument);
 static void test_notify(const char *message)
 {
     snprintf(last_notice, sizeof(last_notice), "%s", message);
+    if (notice_count < 12)
+        snprintf(notices[notice_count++], sizeof(notices[0]), "%s", message);
 }
 static int test_open(const char *path, int flags, ...)
 {
@@ -83,6 +87,7 @@ static void reset(void)
     open_calls = fail_open_count = 0;
     full_device = 0;
     last_notice[0] = 0;
+    notice_count = 0;
     write_failed = 99; /* Reused raw payload memory must not suppress logging. */
 }
 static int log_contains(const char *needle)
@@ -123,6 +128,11 @@ int main(void)
     reset(); callback_mode = 2;
     assert(context_probe_main() == 0);
     assert(log_contains("reads and user return observed; EFI handoff unverified"));
+    assert(notice_count == 6);
+    assert(strcmp(notices[1], "PS4WL Context: CR0=0x0000000000000000") == 0);
+    assert(strcmp(notices[2], "PS4WL Context: CR3=0x0000000000001000") == 0);
+    assert(strcmp(notices[3], "PS4WL Context: CR4=0x0000000000000000") == 0);
+    assert(strcmp(notices[4], "PS4WL Context: EFER=0x0000000000000000") == 0);
     reset(); fail_open_count = 2;
     assert(context_probe_main() == 1);
     assert(callback_calls == 0 && lock_count == 0 && open_calls == 2);

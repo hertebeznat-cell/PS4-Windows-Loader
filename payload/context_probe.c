@@ -50,6 +50,19 @@ static void notify_open_failure(unsigned first, unsigned second)
     PS4WL_CONTEXT_NOTIFY(message);
 }
 
+static void notify_register(const char *name, unsigned long long value)
+{
+    const char digits[] = "0123456789ABCDEF";
+    char message[64] = "PS4WL Context: ";
+    size_t i = 15, j;
+    while (*name && i < sizeof(message) - 20) message[i++] = *name++;
+    message[i++] = '0'; message[i++] = 'x';
+    for (j = 0; j < 16; ++j)
+        message[i++] = digits[(value >> (60 - 4 * j)) & 15];
+    message[i] = 0;
+    PS4WL_CONTEXT_NOTIFY(message);
+}
+
 extern int kexec(void (*callback)(void), void *argument);
 extern int errno;
 volatile struct pwl_context_snapshot pwl_context_result;
@@ -191,7 +204,14 @@ done:
     if (code_locked) munlock((const void *)code_address, code_size);
     if (data_locked) munlock((const void *)&pwl_context_result, sizeof(pwl_context_result));
     if (close(log_fd) != 0 || write_failed) result = 2;
-    if (result == 0) PS4WL_CONTEXT_NOTIFY("PS4WL Context: returned; PS4WL_CONTEXT.LOG ready");
+    if (result == 0) {
+        /* A successful close cannot prove that a host PC will see this path. */
+        notify_register("CR0=", pwl_context_result.cr0);
+        notify_register("CR3=", pwl_context_result.cr3);
+        notify_register("CR4=", pwl_context_result.cr4);
+        notify_register("EFER=", pwl_context_result.efer);
+        PS4WL_CONTEXT_NOTIFY("PS4WL Context: returned; register values shown above");
+    }
     else if (result == 2) PS4WL_CONTEXT_NOTIFY("PS4WL Context: log I/O failed; callback result may be missing");
     else PS4WL_CONTEXT_NOTIFY("PS4WL Context: stopped; read PS4WL_CONTEXT.LOG");
     return result;

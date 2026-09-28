@@ -12,7 +12,10 @@ notification `returned; PS4WL_CONTEXT.LOG ready` on the target PS4. In this
 source version that notification follows a completed callback, CPL0 CS check,
 return to CPL3, successful file close and no detected write error. The
 photographs confirm the final notification; the USB log with the recorded
-register values has not yet been reviewed.
+register values has not yet been reviewed. The tester found no log on the USB
+drive despite that notification. A successful close does not prove that the
+PS4 mount path is exposed to a PC. New builds also show the four register
+values as on-screen notifications and no longer claim the file is ready.
 
 Host tests cover rejection at CPL3 and mocked transport/error/reporting paths.
 An initial hardware run of build `84d35cb` stopped before the callback: the
@@ -45,14 +48,16 @@ the console may reject the call or fault. The probe is not a recovery mechanism.
    existing payload sender. Do not rename it to the Stage 4.8 payload.
 3. Watch the on-screen notification: it identifies USB0 or USB1, reports
    open errors with their errno values, or reports a write/flush failure.
-4. After it returns, collect `PS4WL_CONTEXT.LOG` from the selected USB drive.
-   If no file appears, capture the notification and the payload sender result.
-   An absent file does not establish whether the payload was started.
+4. After it returns, photograph the `CR0`, `CR3`, `CR4`, and `EFER` notices
+   (including leading zeroes) in the PS4 notifications list. A log may also
+   be available at `/mnt/usb0/PS4WL_CONTEXT.LOG` or `/mnt/usb1/PS4WL_CONTEXT.LOG`
+   through a PS4 file manager/FTP, but the notification does not assert that
+   a PC can read it from a removable drive.
 
 No Windows files are required for this test. The result records its source
 commit in `BUILD:` and `COMMIT.txt`. The archive contains checksums and callback
 disassembly for review. The next inspection needs the actual register values
-from the USB log before using them as input to a platform memory inventory.
+from the on-screen notices or log before using them as input to a platform memory inventory.
 
 ## Log initialization and raw binary packaging
 
