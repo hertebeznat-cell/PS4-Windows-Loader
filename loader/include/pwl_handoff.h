@@ -44,6 +44,21 @@ pwl_status_t pwl_handoff_layout_validate(const pwl_phys_region_t *regions,
                                         size_t count,
                                         const pwl_handoff_layout_t *layout);
 
+/* Snapshot of a 4 KiB x86-64 page-table page, supplied by the platform.
+ * The verifier accepts only four-level 4 KiB identity mappings for the
+ * image, stack, and every supplied table page. It does not construct tables,
+ * verify actual CR3, or control CPU/device state.
+ */
+typedef struct pwl_x64_table_page {
+    uint64_t physical_address;
+    const uint64_t *entries; /* Exactly 512 entries. */
+} pwl_x64_table_page_t;
+
+pwl_status_t pwl_x64_handoff_mappings_validate(
+    const pwl_phys_region_t *regions, size_t region_count,
+    const pwl_handoff_layout_t *layout,
+    const pwl_x64_table_page_t *tables, size_t table_count);
+
 /* UEFI 2.x EFI_MEMORY_DESCRIPTOR version 1, 40 bytes on x86-64. */
 typedef struct pwl_efi_memory_descriptor {
     uint32_t type;

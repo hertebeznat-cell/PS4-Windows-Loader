@@ -48,6 +48,16 @@ jobs:
             -Iloader/include loader/src/handoff.c tests/test_handoff.c \
             -o build/test-handoff
           ./build/test-handoff
+      - name: Compile and test handoff page mappings
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -ffreestanding -fno-stack-protector -fno-builtin \
+            -Iloader/include -c loader/src/paging.c -o build/ps4wl-paging.o
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iloader/include loader/src/handoff.c loader/src/paging.c \
+            tests/test_paging.c -o build/test-paging
+          ./build/test-paging
       - name: Test portable PE headers
         run: |
           clang -std=c11 -Wall -Wextra -Wpedantic -Werror \

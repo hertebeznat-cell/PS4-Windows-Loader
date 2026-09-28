@@ -86,6 +86,9 @@ but neither is currently bootable here. The USB path on that machine is
 - Portable physical-memory layout checks with automated tests for overlap,
   alignment, address overflow and image/stack/page-table placement. This module
   is not connected to the PS4 payload until verified physical data is available.
+- Portable x86-64 page-table snapshot checks for supervisor identity mappings,
+  executable image pages and writable NX stack/table pages; CI tests invalid
+  mappings. This checks supplied snapshots, not the console's active CR3.
 - Conversion of verified physical regions into UEFI memory descriptors using
   cacheability supplied by the future platform backend.
 - Portable and active Stage 4.8 PE32+ parsers check section-table and raw
@@ -116,6 +119,9 @@ Follow the [Stage 4.8 preflight procedure](docs/PREFLIGHT_TEST.md) when checking
 the latest artifact on the console.
 The separate [CPU-only probe](docs/CPU_PROBE.md) records processor flags with
 far less setup and does not read or map a Windows image.
+
+The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
+a privileged backend must establish before any further Boot Manager entry.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.

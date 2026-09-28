@@ -61,6 +61,12 @@ rejects unsupported or missing attributes, and preserves unknown address gaps.
 It is a checked conversion of evidence supplied by a future backend, not a
 source of physical address information.
 
+`loader/src/paging.c` validates supplied four-level page-table snapshots for
+identity mapped image, stack and table pages. CI compiles it freestanding and
+tests the walk with sanitizer instrumentation. The snapshots cannot establish
+the active CR3, page ownership or safe execution. The detailed prerequisites
+are in [the EFI handoff contract](EFI_HANDOFF_CONTRACT.md).
+
 ## Existing transition code: adaptation required
 
 The pinned external runtime includes `linux/ps4-kexec-common/linux_boot.c`
