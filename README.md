@@ -107,6 +107,8 @@ boot files are not included in this repository.
 
 New CI artifacts include `COMMIT.txt`; traces include `BUILD:` and an explicit
 `MODE: PREFLIGHT_ONLY` marker. Use these to identify the exact build.
+Follow the [Stage 4.8 preflight procedure](docs/PREFLIGHT_TEST.md) when checking
+the latest artifact on the console.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.

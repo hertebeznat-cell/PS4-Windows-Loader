@@ -107,6 +107,7 @@ jobs:
         run: |
           file build/latest/PS4WindowsLoader-latest.elf
           readelf -h build/latest/PS4WindowsLoader-latest.elf
+          strings build/latest/PS4WindowsLoader-latest.elf | grep -Fq 'MODE: PREFLIGHT_ONLY; Boot Manager entry disabled'
           ls -lh build/latest/PS4WindowsLoader-latest.*
           sha256sum build/latest/PS4WindowsLoader-latest.bin | tee build/latest/SHA256SUMS.txt
           cp PS4_RUNTIME_COMMIT.txt build/latest/
