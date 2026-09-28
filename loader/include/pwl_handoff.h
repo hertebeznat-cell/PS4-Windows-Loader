@@ -54,6 +54,20 @@ typedef struct pwl_x64_table_page {
     const uint64_t *entries; /* Exactly 512 entries. */
 } pwl_x64_table_page_t;
 
+/* CPU register snapshot and table pages must come from the same quiescent
+ * context. This checks the mode/root relationship, not the provenance or
+ * stability of either input. Never use a photographed CR3 as table evidence.
+ */
+typedef struct pwl_x64_cpu_state {
+    uint64_t cr0;
+    uint64_t cr3;
+    uint64_t cr4;
+    uint64_t efer;
+} pwl_x64_cpu_state_t;
+
+pwl_status_t pwl_x64_cpu_state_validate(
+    const pwl_x64_cpu_state_t *cpu, uint64_t expected_root_pa);
+
 pwl_status_t pwl_x64_handoff_mappings_validate(
     const pwl_phys_region_t *regions, size_t region_count,
     const pwl_handoff_layout_t *layout,

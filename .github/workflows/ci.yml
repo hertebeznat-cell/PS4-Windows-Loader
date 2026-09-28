@@ -58,6 +58,16 @@ jobs:
             -Iloader/include loader/src/handoff.c loader/src/paging.c \
             tests/test_paging.c -o build/test-paging
           ./build/test-paging
+      - name: Compile and test CPU handoff state gate
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -ffreestanding -fno-stack-protector -fno-builtin \
+            -Iloader/include -c loader/src/cpu_state.c -o build/ps4wl-cpu-state.o
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iloader/include loader/src/cpu_state.c tests/test_cpu_state.c \
+            -o build/test-cpu-state
+          ./build/test-cpu-state
       - name: Test portable PE headers
         run: |
           clang -std=c11 -Wall -Wextra -Wpedantic -Werror \

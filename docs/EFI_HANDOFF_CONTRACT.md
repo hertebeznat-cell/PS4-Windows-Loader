@@ -8,6 +8,10 @@ The returning hardware context probe observed CR0 `0x8005003B`, CR3
 `0x0B28B000`, CR4 `0x406F0` and EFER `0xD01` in the PS4 kernel callback.
 These establish active long-mode paging and NX at that instant, but do not
 verify the pointed-to tables, mappings, page ownership or a future handoff.
+`pwl_x64_cpu_state_validate` now checks a supplied CPU snapshot against an
+expected root and the mode assumed by the four-level table verifier. The
+photographed snapshot passes that mode check with root `0x0B28B000`; this
+does not provide the contents of that root or tie any later snapshot to it.
 
 ## Evidence required from a platform backend
 
