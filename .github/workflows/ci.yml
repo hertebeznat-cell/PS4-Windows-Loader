@@ -75,6 +75,14 @@ jobs:
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
       - name: Build PS4 freestanding runtime
         run: make -C ps4-runtime/lib
+      - name: Test standalone CPU log format on CI host
+        run: |
+          mkdir -p build
+          gcc -std=c11 \
+            '-DPS4WL_CPU_LOG_PATH="build/CPU-PROBE-TEST.LOG"' \
+            payload/cpu_probe.c -o build/test-cpu-probe
+          ./build/test-cpu-probe
+          python3 tools/check_cpu_log.py build/CPU-PROBE-TEST.LOG
       - name: Test PE parser used by latest payload
         run: |
           mkdir -p build
@@ -116,9 +124,31 @@ jobs:
           cp PS4_RUNTIME_COMMIT.txt build/latest/
           printf '%s\n' "$LATEST_STAGE" > build/latest/STAGE.txt
           printf '%s\n' "$GITHUB_SHA" > build/latest/COMMIT.txt
+      - name: Build standalone PS4 CPU probe
+        run: |
+          mkdir -p build/cpu-probe
+          gcc -isystem ps4-runtime/freebsd-headers \
+            -nostdinc -nostdlib -fno-stack-protector -fno-builtin \
+            -static -fPIE -ffreestanding \
+            "-DPS4WL_BUILD_ID=\"${GITHUB_SHA}\"" \
+            ps4-runtime/lib/lib.a payload/cpu_probe.c \
+            -Wl,-gc-sections -o build/cpu-probe/PS4WindowsLoader-CPU-Probe.elf
+          objcopy build/cpu-probe/PS4WindowsLoader-CPU-Probe.elf \
+            --only-section .text --only-section .data \
+            --only-section .bss --only-section .rodata -O binary \
+            build/cpu-probe/PS4WindowsLoader-CPU-Probe.bin
+          strings build/cpu-probe/PS4WindowsLoader-CPU-Probe.elf | grep -Fq 'MODE: CPU_ONLY; no EFI or Boot Manager entry'
+          sha256sum build/cpu-probe/PS4WindowsLoader-CPU-Probe.bin | tee build/cpu-probe/SHA256SUMS.txt
+          printf '%s\n' "$GITHUB_SHA" > build/cpu-probe/COMMIT.txt
       - name: Upload latest loader
         uses: actions/upload-artifact@v4
         with:
           name: PS4-Windows-Loader-Latest
           path: build/latest/
+          retention-days: 30
+      - name: Upload standalone CPU probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-CPU-Probe
+          path: build/cpu-probe/
           retention-days: 30

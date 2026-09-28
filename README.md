@@ -113,6 +113,8 @@ for checking processor requirements against evidence from the console. Use the
 build markers to identify the exact artifact.
 Follow the [Stage 4.8 preflight procedure](docs/PREFLIGHT_TEST.md) when checking
 the latest artifact on the console.
+The separate [CPU-only probe](docs/CPU_PROBE.md) records processor flags with
+far less setup and does not read or map a Windows image.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.

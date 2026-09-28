@@ -44,7 +44,7 @@ cacheability. They do not discover RAM, build page tables, or authorize a CPU
 transition. They remain separate from the PS4 payload until a platform backend
 can supply verified data.
 
-The Stage 4.8 preflight records raw CPUID leaves 0, 1, 7 (when supported),
+The standalone CPU probe and Stage 4.8 preflight record raw CPUID leaves 0, 1, 7 (when supported),
 `0x80000000`, `0x80000001` and `0x8000000A` (when supported) to its USB log.
 This makes CPU evidence available after the next console check. No values for
 the target PS4 are assumed in this matrix before a matching log is captured.
