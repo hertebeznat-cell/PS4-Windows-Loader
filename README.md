@@ -17,7 +17,8 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > This is boot research, not a working Windows installation. `bootmgfw.efi` has
 > executed on a PS4, but `winload.efi`, the Windows kernel, setup, graphics, and
 > device drivers have **not** been reached. The latest Stage 4.8 trace records
-> `SIGBUS` immediately after the low-address allocation succeeds.
+> `SIGBUS` immediately after the low-address allocation succeeds. The next
+> build tests a narrowly matched workaround for its privileged `CR3` read.
 
 ## Where it stands
 
@@ -43,11 +44,16 @@ Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
 `AllocatePages(AllocateAddress, EfiLoaderData, 1, 0x00102000)` then returned
 `EFI_SUCCESS` and the requested address. The following fault handler recorded
 `SIGBUS`, code `3`, and `siginfo.si_addr=0x40058666`, within the mapped
-`bootmgfw.efi` image at offset `0x58666`. The previous handler's reported
+`bootmgfw.efi` image at offset `0x58666`. The next trace confirmed the bytes
+`0F 20 D8` there, an x86-64 instruction that reads `CR3` and cannot run in
+the PS4 payload's user process. The current build checks the surrounding bytes
+and replaces that one instruction with a zero result, then logs
+`CR3PROBE48`. This is an experiment to discover the next firmware request; it
+does not supply real page tables or establish a working Windows boot. The
+previous handler's reported
 instruction and stack pointers are unreliable because its context layout does
-not match the signal frame seen on this PS4. The updated diagnostic logs raw
-context words and image bytes near that offset; a new hardware run is needed
-to identify the cause of the fault.
+not match the signal frame seen on this PS4. The diagnostic logs raw context
+words and image bytes near that offset; another hardware run is required.
 
 ## Boot path
 
@@ -84,7 +90,7 @@ complete its own BCD processing or start Windows.
    your own test USB volume. These files are not included in this repository.
 3. Run `PS4WindowsLoader-latest.bin` with the PS4 payload method for your test
    console. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`.
-4. Preserve the complete log. A `FAULT48` entry records a delivered signal,
+4. Preserve the complete log. Check the `CR3PROBE48` result. A `FAULT48` entry records a delivered signal,
    its reported fault address, and raw context words. The `MMAP48: image word=`
    lines record nearby bytes of the mapped image. If no `FAULT48` line appears,
    the log alone cannot distinguish a stall from a fault the process could not
@@ -105,8 +111,8 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Inspect the next Stage 4.8 trace to identify the cause of `SIGBUS` after
-   the successful allocation. Never force-map over an occupied page.
+1. Inspect the next Stage 4.8 trace after the verified `CR3` workaround to
+   identify the next missing firmware interface. Never force-map over an occupied page.
 2. Model a truthful, stable physical memory map and required firmware tables;
    the current process mappings and synthetic EFI descriptors are insufficient
    for a Windows kernel handoff.

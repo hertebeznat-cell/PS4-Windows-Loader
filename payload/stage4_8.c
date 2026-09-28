@@ -39,6 +39,32 @@ static int window48_active;
 static int trace48_busy;
 static size_t native_page_size48;
 static int fault48_installed;
+static int cr3_probe48_done;
+
+/* This exact bootmgfw image reads CR3 at +0x58666 while running in user mode.
+ * Substitute a zero probe result so it can continue to the next EFI call.
+ * Never patch an image whose surrounding bytes differ from the observed log.
+ */
+static void bypass_cr3_probe48(void)
+{
+    static const u8 before[]={0x48,0x89,0x73,0x10,0x0f,0x20,0xd8,0x33,0xd2};
+    static const u8 after[]={0x48,0x89,0x73,0x10,0x31,0xc0,0x90,0x33,0xd2};
+    u8 *image=(u8*)loaded32.ImageBase;
+    UINTN i;
+    if(cr3_probe48_done)return;
+    cr3_probe48_done=1;
+    if(!image||loaded32.ImageSize<0x5866bU){
+        log45("CR3PROBE48: no mapped image at observed offset\n");
+        return;
+    }
+    for(i=0;i<sizeof(before);i++)if(image[0x58662U+i]!=before[i]){
+        log45("CR3PROBE48: image signature differs; no patch\n");
+        return;
+    }
+    for(i=0;i<sizeof(after);i++)image[0x58662U+i]=after[i];
+    __builtin___clear_cache((char*)(image+0x58662U),(char*)(image+0x5866bU));
+    log45("CR3PROBE48: privileged CR3 read replaced with zero (experimental)\n");
+}
 
 static void snapshot48(void)
 {
@@ -181,6 +207,7 @@ void *ps4wl_mmap48(void *addr,size_t len,int prot,int flags,int fd,off_t off)
             window48_active=1;
             log45("MMAP48: backing window ready; exposing requested page\n");
             snapshot48();
+            bypass_cr3_probe48();
             return (void*)(unsigned long)TARGET48_ADDR;
         }
         if(p!=(void*)-1)
