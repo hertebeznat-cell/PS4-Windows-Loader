@@ -93,8 +93,20 @@ static void fault48(int signo,siginfo_t *info,void *context)
         log_hex45("FAULT48: code=",(u64)(u32)info->si_code);
         log_hex45("FAULT48: address=",(u64)(unsigned long)info->si_addr);
         if(base && (u64)(unsigned long)info->si_addr>=base &&
-           (u64)(unsigned long)info->si_addr-base<loaded32.ImageSize)
+           (u64)(unsigned long)info->si_addr-base<loaded32.ImageSize){
+            u64 offset=(u64)(unsigned long)info->si_addr-base;
+            u64 start=offset>=16U?(offset-16U)&~7ULL:0;
             log_hex45("FAULT48: image offset=",(u64)(unsigned long)info->si_addr-base);
+            if(start+64U<=loaded32.ImageSize){
+                const u8 *image=(const u8*)loaded32.ImageBase;
+                log_hex45("FAULT48: bytes start offset=",start);
+                for(i=0;i<8;i++){
+                    u64 word=0;
+                    mem_copy(&word,image+start+i*8U,sizeof(word));
+                    log_hex45("FAULT48: image word=",word);
+                }
+            }
+        }
     }
     if(context){
         const u64 *words=(const u64*)context;

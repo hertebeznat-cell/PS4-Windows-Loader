@@ -48,8 +48,10 @@ Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
 `0F 20 D8` there, an x86-64 instruction that reads `CR3` and cannot run in
 the PS4 payload's user process. The current build checks the surrounding bytes
 and replaces that one instruction with a zero result, then logs
-`CR3PROBE48`. This is an experiment to discover the next firmware request; it
-does not supply real page tables or establish a working Windows boot. The
+`CR3PROBE48`. The next hardware run passed that instruction and stopped at a
+second `SIGBUS`, with `si_addr` at image offset `0x28544A`. The handler now
+records the bytes around new fault addresses for instruction analysis. This
+experiment does not supply real page tables or establish a working Windows boot. The
 previous handler's reported
 instruction and stack pointers are unreliable because its context layout does
 not match the signal frame seen on this PS4. The diagnostic logs raw context
@@ -91,8 +93,8 @@ complete its own BCD processing or start Windows.
 3. Run `PS4WindowsLoader-latest.bin` with the PS4 payload method for your test
    console. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`.
 4. Preserve the complete log. Check the `CR3PROBE48` result. A `FAULT48` entry records a delivered signal,
-   its reported fault address, and raw context words. The `MMAP48: image word=`
-   lines record nearby bytes of the mapped image. If no `FAULT48` line appears,
+   its reported fault address, raw context words and `FAULT48: image word=`
+   lines near that address. If no `FAULT48` line appears,
    the log alone cannot distinguish a stall from a fault the process could not
    report.
 
@@ -111,8 +113,8 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Inspect the next Stage 4.8 trace after the verified `CR3` workaround to
-   identify the next missing firmware interface. Never force-map over an occupied page.
+1. Identify the instruction at the new `SIGBUS` offset `0x28544A` from the next
+   Stage 4.8 trace. Never force-map over an occupied page.
 2. Model a truthful, stable physical memory map and required firmware tables;
    the current process mappings and synthetic EFI descriptors are insufficient
    for a Windows kernel handoff.
