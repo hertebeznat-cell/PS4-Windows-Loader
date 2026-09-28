@@ -15,6 +15,7 @@
 #define PS4WL_STAGE48_PREFLIGHT_ONLY 1
 #define PS4WL_TRACE_PATH "/mnt/usb0/PS4WL_STAGE48.LOG"
 static void inspect_bootmgfw48(void);
+static void probe_cpu48(void);
 #define mmap ps4wl_mmap48
 #define munmap ps4wl_munmap48
 #include "stage4_5.c"
@@ -41,6 +42,41 @@ static int window48_active;
 static int trace48_busy;
 static size_t native_page_size48;
 static int fault48_installed;
+
+static void cpuid48(u32 leaf,u32 subleaf,u32 *a,u32 *b,u32 *c,u32 *d)
+{
+    __asm__ volatile("cpuid" : "=a"(*a),"=b"(*b),"=c"(*c),"=d"(*d)
+                     : "a"(leaf),"c"(subleaf));
+}
+
+static void log_cpuid48(u32 leaf,u32 subleaf)
+{
+    u32 a,b,c,d;
+    log_hex45("CPU48: leaf=",leaf);
+    log_hex45("CPU48: subleaf=",subleaf);
+    cpuid48(leaf,subleaf,&a,&b,&c,&d);
+    log_hex45("CPU48: eax=",a);
+    log_hex45("CPU48: ebx=",b);
+    log_hex45("CPU48: ecx=",c);
+    log_hex45("CPU48: edx=",d);
+}
+
+static void probe_cpu48(void)
+{
+    u32 a,b,c,d,basic_max,extended_max;
+    cpuid48(0,0,&a,&b,&c,&d);
+    basic_max=a;
+    log45("CPU48: CPUID raw registers begin\n");
+    log_cpuid48(0,0);
+    if(basic_max>=1U)log_cpuid48(1,0);
+    if(basic_max>=7U)log_cpuid48(7,0);
+    cpuid48(0x80000000U,0,&a,&b,&c,&d);
+    extended_max=a;
+    log_cpuid48(0x80000000U,0);
+    if(extended_max>=0x80000001U)log_cpuid48(0x80000001U,0);
+    if(extended_max>=0x8000000aU)log_cpuid48(0x8000000aU,0);
+    log45("CPU48: CPUID raw registers end\n");
+}
 
 static void inspect_bootmgfw48(void)
 {

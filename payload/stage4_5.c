@@ -354,6 +354,9 @@ static void open_trace45(void)
         log45("Executable low-memory arena + UEFI AllocatePages enabled\n");
 #endif
         log45("BUILD: " PS4WL_BUILD_ID "\n");
+#if defined(PS4WL_STAGE48) && defined(PS4WL_STAGE48_PREFLIGHT_ONLY)
+        probe_cpu48();
+#endif
     }
 }
 

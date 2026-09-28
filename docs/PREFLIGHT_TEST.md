@@ -17,8 +17,12 @@ PS4 Slim CUH-2208B. It does **not** start Boot Manager or Windows 11/Server
 3. Save the resulting `/mnt/usb0/PS4WL_STAGE48.LOG` and read it before any
    further test. It should identify the exact `BUILD:` commit, include
    `MODE: PREFLIGHT_ONLY; Boot Manager entry disabled`, and show
+   `CPU48: CPUID raw registers begin`, `CPU48: CPUID raw registers end`, and
    `PREFLIGHT48: image mapped; Boot Manager entry disabled`. A clean return
-   after those markers confirms only this preflight milestone.
+   after those markers confirms only this preflight milestone. Preserve every
+   `CPU48:` line: each leaf/subleaf is followed by EAX, EBX, ECX and EDX.
+   The values identify processor capabilities reported to this process; they
+   do not by themselves prove Windows compatibility or a viable OS handoff.
 
 If the log is missing, the build marker differs, the PE validation fails, or
 the console does not return normally, stop this test and preserve the complete

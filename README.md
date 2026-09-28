@@ -106,7 +106,9 @@ earlier artifacts containing the experimental `CR3` substitution. Microsoft
 boot files are not included in this repository.
 
 New CI artifacts include `COMMIT.txt`; traces include `BUILD:` and an explicit
-`MODE: PREFLIGHT_ONLY` marker. Use these to identify the exact build.
+`MODE: PREFLIGHT_ONLY` marker. The preflight also records raw CPUID registers
+for checking processor requirements against evidence from the console. Use the
+build markers to identify the exact artifact.
 Follow the [Stage 4.8 preflight procedure](docs/PREFLIGHT_TEST.md) when checking
 the latest artifact on the console.
 
