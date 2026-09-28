@@ -24,6 +24,14 @@ PS4 Slim CUH-2208B. It does **not** start Boot Manager or Windows 11/Server
    The values identify processor capabilities reported to this process; they
    do not by themselves prove Windows compatibility or a viable OS handoff.
 
+After saving the log on a computer, run
+`python3 tools/check_cpu_log.py PS4WL_STAGE48.LOG` from the repository root.
+The output distinguishes reported `YES`, `NO`, and missing `UNKNOWN` CPU flags
+used in the Server 2025 requirement list. Windows 11 eligibility and the
+remaining platform requirements still need separate evidence.
+The bit positions follow the [Linux x86 CPU feature definitions](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/cpufeatures.h);
+the required capabilities come from [Microsoft's Server hardware guide](https://learn.microsoft.com/en-us/windows-server/get-started/hardware-requirements).
+
 If the log is missing, the build marker differs, the PE validation fails, or
 the console does not return normally, stop this test and preserve the complete
 log and the exact artifact. Do not switch to an earlier artifact that calls

@@ -55,6 +55,8 @@ jobs:
             -Iloader/include loader/src/main.c tests/test_pe.c \
             -o build/test-pe
           ./build/test-pe
+      - name: Test CPU log analysis
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_cpu_log.py
 
   ps4-loader:
     name: Build latest PS4 loader
