@@ -12,7 +12,7 @@ permissions:
 
 env:
   PS4_LOADER_COMMIT: f70f43a60a973b3662daeb29c1f115d95408db93
-  LATEST_STAGE: stage4_7
+  LATEST_STAGE: stage4_8
 
 jobs:
   stage0-core:
@@ -37,24 +37,24 @@ jobs:
           llvm-readelf -h build/ps4wl-main.o
           llvm-nm -g build/ps4wl-main.o
 
-  ps4-payload:
-    name: Build latest PS4 payload
+  ps4-loader:
+    name: Build latest PS4 loader
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-      - name: Install PS4 payload toolchain dependencies
+      - name: Install PS4 loader toolchain dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential binutils git python3 yasm
-      - name: Fetch pinned PS4 payload runtime
+      - name: Fetch pinned PS4 loader runtime
         run: |
           git clone https://github.com/ps4-linux/ps4-linux-loader.git ps4-runtime
           git -C ps4-runtime checkout "$PS4_LOADER_COMMIT"
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
       - name: Build PS4 freestanding runtime
         run: make -C ps4-runtime/lib
-      - name: Build latest payload
+      - name: Build latest loader
         run: |
           mkdir -p build/latest
           gcc \
@@ -74,7 +74,7 @@ jobs:
             --only-section .rodata \
             -O binary \
             build/latest/PS4WindowsLoader-latest.bin
-      - name: Inspect latest payload
+      - name: Inspect latest loader
         run: |
           file build/latest/PS4WindowsLoader-latest.elf
           readelf -h build/latest/PS4WindowsLoader-latest.elf
@@ -82,7 +82,7 @@ jobs:
           sha256sum build/latest/PS4WindowsLoader-latest.bin | tee build/latest/SHA256SUMS.txt
           cp PS4_RUNTIME_COMMIT.txt build/latest/
           printf '%s\n' "$LATEST_STAGE" > build/latest/STAGE.txt
-      - name: Upload latest payload only
+      - name: Upload latest loader
         uses: actions/upload-artifact@v4
         with:
           name: PS4-Windows-Loader-Latest
