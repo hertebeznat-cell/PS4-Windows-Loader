@@ -48,6 +48,11 @@ pwl_status_t pwl_pe_inspect(const void *data, size_t size, pwl_pe_image_t *image
     uint16_t machine;
     uint16_t optional_size;
     uint16_t magic;
+    uint16_t section_count;
+    uint32_t header_size;
+    size_t section_offset;
+    size_t i;
+    int executable_entry = 0;
 
     if (data == NULL || image == NULL) {
         return PWL_ERR_INVALID_ARGUMENT;
@@ -70,6 +75,7 @@ pwl_status_t pwl_pe_inspect(const void *data, size_t size, pwl_pe_image_t *image
     }
 
     machine = read_u16_le(coff + 4);
+    section_count = read_u16_le(coff + 6);
     optional_size = read_u16_le(coff + 20);
 
     /* IMAGE_FILE_MACHINE_AMD64 */
@@ -90,21 +96,47 @@ pwl_status_t pwl_pe_inspect(const void *data, size_t size, pwl_pe_image_t *image
         return PWL_ERR_UNSUPPORTED;
     }
 
-    image->file_data = data;
-    image->file_size = size;
     image->entry_rva = read_u32_le(optional + 0x10);
     image->preferred_base = read_u64_le(optional + 0x18);
     image->image_size = read_u32_le(optional + 0x38);
+    header_size = read_u32_le(optional + 0x3c);
+    section_offset = (size_t)pe_offset + 24U + optional_size;
 
     if (image->image_size == 0U || image->entry_rva >= image->image_size ||
-        read_u32_le(optional + 0x3c) == 0U ||
-        read_u32_le(optional + 0x3c) > image->image_size ||
-        read_u32_le(optional + 0x3c) > size) {
-        memset(image, 0, sizeof(*image));
-        return PWL_ERR_BAD_IMAGE;
+        header_size == 0U || header_size > image->image_size ||
+        header_size > size || header_size < section_offset ||
+        section_count == 0 ||
+        (size_t)section_count > (header_size - section_offset) / 40U ||
+        (size_t)section_count > (size - section_offset) / 40U)
+        goto bad_image;
+
+    for (i = 0; i < section_count; ++i) {
+        const uint8_t *section = bytes + section_offset + i * 40U;
+        uint32_t virtual_size = read_u32_le(section + 8);
+        uint32_t virtual_address = read_u32_le(section + 12);
+        uint32_t raw_size = read_u32_le(section + 16);
+        uint32_t raw_offset = read_u32_le(section + 20);
+        uint32_t mapped_size = virtual_size > raw_size ? virtual_size : raw_size;
+        if (virtual_address > image->image_size ||
+            mapped_size > image->image_size - virtual_address ||
+            (raw_size != 0 && (raw_offset > size || raw_size > size - raw_offset)))
+            goto bad_image;
+        if (image->entry_rva >= virtual_address &&
+            image->entry_rva - virtual_address < mapped_size &&
+            (read_u32_le(section + 36) & UINT32_C(0x20000000)) != 0)
+            executable_entry = 1;
     }
+    if (!executable_entry)
+        goto bad_image;
+
+    image->file_data = data;
+    image->file_size = size;
 
     return PWL_OK;
+
+bad_image:
+    memset(image, 0, sizeof(*image));
+    return PWL_ERR_BAD_IMAGE;
 }
 
 pwl_status_t pwl_boot_windows(void) {

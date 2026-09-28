@@ -87,8 +87,10 @@ but neither is currently bootable here. The USB path on that machine is
   is not connected to the PS4 payload until verified physical data is available.
 - Conversion of verified physical regions into UEFI memory descriptors using
   cacheability supplied by the future platform backend.
-- Portable PE32+ header checks for truncated optional headers, image entry
-  bounds and header size, exercised by CI with a synthetic image.
+- Portable PE32+ inspection checks header and section-table bounds, raw section
+  extents, and whether the entry lies in an executable section; CI exercises
+  rejected images using synthetic fixtures. The PS4 payload has its own PE
+  loader, so these portable checks are not yet enforcement for hardware runs.
 
 These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
