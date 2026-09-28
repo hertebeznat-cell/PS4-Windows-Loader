@@ -54,6 +54,9 @@ The CI artifact links the runtime library, not this kexec transition.
 ## Portable checks available now
 
 `pwl_handoff_layout_validate` checks the supplied physical placement;
+`pwl_x64_handoff_tables_build` constructs four-level 4 KiB identity mappings
+for the image, stack and allocated table pages in explicitly supplied physical
+pages, then runs the independent snapshot verifier. It never installs CR3.
 `pwl_x64_handoff_mappings_validate` checks snapshots of four-level x86-64
 4 KiB tables for identity mapped image, stack and every supplied table page.
 It requires supervisor pages, executable image, writable NX stack/table pages,

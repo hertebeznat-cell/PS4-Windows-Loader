@@ -58,6 +58,11 @@ jobs:
             -Iloader/include loader/src/handoff.c loader/src/paging.c \
             tests/test_paging.c -o build/test-paging
           ./build/test-paging
+          clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iloader/include loader/src/handoff.c loader/src/paging.c \
+            tests/test_paging_build.c -o build/test-paging-build
+          ./build/test-paging-build
       - name: Compile and test CPU handoff state gate
         run: |
           clang -std=c11 -Wall -Wextra -Wpedantic -Werror \

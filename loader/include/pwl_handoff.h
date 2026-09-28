@@ -51,7 +51,7 @@ pwl_status_t pwl_handoff_layout_validate(const pwl_phys_region_t *regions,
  */
 typedef struct pwl_x64_table_page {
     uint64_t physical_address;
-    const uint64_t *entries; /* Exactly 512 entries. */
+    uint64_t *entries; /* Exactly 512 entries; writable for construction. */
 } pwl_x64_table_page_t;
 
 /* CPU register snapshot and table pages must come from the same quiescent
@@ -72,6 +72,17 @@ pwl_status_t pwl_x64_handoff_mappings_validate(
     const pwl_phys_region_t *regions, size_t region_count,
     const pwl_handoff_layout_t *layout,
     const pwl_x64_table_page_t *tables, size_t table_count);
+
+/* Build 4 KiB identity mappings in caller-owned, writable table pages.
+ * Table pages[0] is the root. The backend supplies their physical ownership
+ * and must independently verify that the CPU will use this root.
+ * On failure the supplied pages may contain partial tables: never activate.
+ */
+pwl_status_t pwl_x64_handoff_tables_build(
+    const pwl_phys_region_t *regions, size_t region_count,
+    const pwl_handoff_layout_t *layout,
+    pwl_x64_table_page_t *tables, size_t table_capacity,
+    size_t *table_count_out);
 
 /* UEFI 2.x EFI_MEMORY_DESCRIPTOR version 1, 40 bytes on x86-64. */
 typedef struct pwl_efi_memory_descriptor {

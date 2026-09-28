@@ -102,3 +102,83 @@ pwl_status_t pwl_x64_handoff_mappings_validate(
             return PWL_ERR_INVALID_ARGUMENT;
     return PWL_OK;
 }
+
+static int map_page(pwl_x64_table_page_t *tables, size_t capacity,
+                    size_t *used, uint64_t address, uint64_t flags)
+{
+    static const unsigned shifts[] = {39, 30, 21, 12};
+    size_t index = 0;
+    unsigned level;
+    for (level = 0; level < 3; ++level) {
+        uint64_t *entry = &tables[index].entries[(address >> shifts[level]) & 511U];
+        if (!(*entry & PWL_X64_PRESENT)) {
+            if (*used == capacity) return 0;
+            *entry = tables[*used].physical_address | PWL_X64_PRESENT | PWL_X64_WRITE;
+            index = (*used)++;
+        } else {
+            const pwl_x64_table_page_t *next = table_at(tables, *used, *entry & PWL_X64_ADDR);
+            if (next == NULL || (*entry & (PWL_X64_USER | PWL_X64_LARGE | PWL_X64_NX)))
+                return 0;
+            index = (size_t)(next - tables);
+        }
+    }
+    {
+        uint64_t *leaf = &tables[index].entries[(address >> 12) & 511U];
+        uint64_t wanted = address | PWL_X64_PRESENT | flags;
+        if (*leaf && *leaf != wanted) return 0;
+        *leaf = wanted;
+    }
+    return 1;
+}
+
+static int map_span(pwl_x64_table_page_t *tables, size_t capacity,
+                    size_t *used, uint64_t base, uint64_t length, uint64_t flags)
+{
+    uint64_t offset;
+    if (base >= PWL_X64_LOWER_LIMIT ||
+        length > PWL_X64_LOWER_LIMIT - base) return 0;
+    for (offset = 0; offset < length; offset += PWL_PAGE_SIZE)
+        if (!map_page(tables, capacity, used, base + offset, flags)) return 0;
+    return 1;
+}
+
+pwl_status_t pwl_x64_handoff_tables_build(
+    const pwl_phys_region_t *regions, size_t region_count,
+    const pwl_handoff_layout_t *layout,
+    pwl_x64_table_page_t *tables, size_t table_capacity,
+    size_t *table_count_out)
+{
+    size_t i, j, used = 1;
+    if (table_count_out == NULL || tables == NULL || table_capacity < 4 ||
+        pwl_handoff_layout_validate(regions, region_count, layout) != PWL_OK ||
+        tables[0].physical_address != layout->page_table_root_pa)
+        return PWL_ERR_INVALID_ARGUMENT;
+    *table_count_out = 0;
+    for (i = 0; i < table_capacity; ++i) {
+        uint64_t pa = tables[i].physical_address;
+        if (tables[i].entries == NULL || (pa & (PWL_PAGE_SIZE - 1)) ||
+            !owned_data_page(regions, region_count, pa) ||
+            (pa >= layout->stack_pa && pa - layout->stack_pa < layout->stack_size))
+            return PWL_ERR_INVALID_ARGUMENT;
+        for (j = 0; j < i; ++j)
+            if (tables[j].physical_address == pa ||
+                tables[j].entries == tables[i].entries)
+                return PWL_ERR_INVALID_ARGUMENT;
+    }
+    for (i = 0; i < table_capacity; ++i)
+        for (j = 0; j < 512; ++j) tables[i].entries[j] = 0;
+    if (!map_span(tables, table_capacity, &used, layout->image_pa,
+                  layout->image_size, PWL_X64_WRITE) ||
+        !map_span(tables, table_capacity, &used, layout->stack_pa,
+                  layout->stack_size, PWL_X64_WRITE | PWL_X64_NX))
+        return PWL_ERR_BUFFER_TOO_SMALL;
+    for (i = 0; i < used; ++i)
+        if (!map_page(tables, table_capacity, &used, tables[i].physical_address,
+                      PWL_X64_WRITE | PWL_X64_NX))
+            return PWL_ERR_BUFFER_TOO_SMALL;
+    if (pwl_x64_handoff_mappings_validate(regions, region_count, layout,
+                                           tables, used) != PWL_OK)
+        return PWL_ERR_INVALID_ARGUMENT;
+    *table_count_out = used;
+    return PWL_OK;
+}
