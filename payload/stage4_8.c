@@ -20,27 +20,63 @@
 
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
 int munmap(void *addr, size_t len);
-/* The pinned PS4 runtime exports an errno variable, not FreeBSD's __error(). */
+/* The pinned PS4 runtime exports errno and the raw __sysctl syscall. */
 extern int errno;
+int __sysctl(int *name, unsigned int namelen, void *oldp, size_t *oldlenp,
+             void *newp, size_t newlen);
 
 #define WINDOW48_BASE 0x0000000000100000ULL
 #define WINDOW48_SIZE 0x0000000000004000ULL
 #define TARGET48_ADDR 0x0000000000102000ULL
 #define PS4WL_ENOMEM 12
 #define EFI_RESERVED_MEMORY_TYPE 0U
+#define PS4WL_CTL_HW 6
+#define PS4WL_HW_PAGESIZE 7
 
 static int window48_active;
 static int trace48_busy;
+static size_t native_page_size48;
+
+static size_t page_size48(void)
+{
+    int mib[2]={PS4WL_CTL_HW,PS4WL_HW_PAGESIZE};
+    int value=0,rc,error;
+    size_t length=sizeof(value);
+    if(native_page_size48)return native_page_size48;
+    errno=0;
+    rc=__sysctl(mib,2,&value,&length,0,0);
+    error=errno;
+    log_hex45("MMAP48: hw.pagesize sysctl status=",(u64)(u32)rc);
+    if(rc!=0){
+        log_hex45("MMAP48: hw.pagesize errno=",(u64)(u32)error);
+        return 0;
+    }
+    log_hex45("MMAP48: native page size=",(u64)(u32)value);
+    if(length!=sizeof(value)||value<4096||value>WINDOW48_SIZE||
+       ((u32)value&((u32)value-1U))!=0)
+        return 0;
+    native_page_size48=(size_t)value;
+    return native_page_size48;
+}
 
 static int window48_free(void)
 {
     u64 a;
-    for(a=WINDOW48_BASE;a<WINDOW48_BASE+WINDOW48_SIZE;a+=EFI_PAGE_SIZE){
+    size_t granularity=page_size48();
+    if(!granularity){
+        log45("MMAP48: native page size unknown; skipping fixed mapping\n");
+        return 0;
+    }
+    if((TARGET48_ADDR&(granularity-1U))!=0){
+        log45("MMAP48: EFI address is not native-page aligned\n");
+    }
+    for(a=WINDOW48_BASE;a<WINDOW48_BASE+WINDOW48_SIZE;a+=(u64)granularity){
         char vec=0;
         int error;
         errno=0;
-        if(mincore((void*)(unsigned long)a,(size_t)EFI_PAGE_SIZE,&vec)==0){
+        if(mincore((void*)(unsigned long)a,granularity,&vec)==0){
             log_hex45("MMAP48: backing page occupied=",a);
+            log_hex45("MMAP48: mincore vector=",(u64)(u8)vec);
             return 0;
         }
         error=errno;
