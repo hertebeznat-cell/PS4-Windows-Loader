@@ -19,8 +19,9 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > device drivers have **not** been reached. The latest Stage 4.8 trace records
 > `SIGBUS` immediately after the low-address allocation succeeds. A later
 > experimental build reached another fault, and a console shutdown was reported.
-> The latest build is a limited preflight: it maps `bootmgfw.efi`, logs bytes
-> around the second fault, and returns without calling Microsoft's entry point.
+> The latest build is a limited preflight: it maps `bootmgfw.efi` and returns
+> without calling Microsoft's entry point. The second fault's bytes are already
+> present in the collected trace; no additional console run is needed.
 
 ## Where it stands
 
@@ -50,7 +51,8 @@ Hardware runs vary: one Stage 4.8 run found `0x00100000` occupied and returned
 `bootmgfw.efi` image at offset `0x58666`. The next trace confirmed the bytes
 `0F 20 D8` there, an x86-64 instruction that reads `CR3` and cannot run in
 the PS4 payload's user process. An experimental build replaced the instruction
-with a zero result and reached a second `SIGBUS` at offset `0x28544A`. A console
+with a zero result and reached a second `SIGBUS` at offset `0x28544A`, where
+the bytes `0F 32` encode `RDMSR`. A console
 shutdown and system storage check were then reported; their cause has not been
 established. The instruction replacement has been removed from `main`.
 The previous handler's reported
@@ -85,19 +87,14 @@ These interfaces are partial implementations for bring-up. A successful
 callback or pre-entry BCD self-test does not establish that Boot Manager can
 complete its own BCD processing or start Windows.
 
-## Build and collect the preflight trace
+## Build status
 
-1. Download the **PS4-Windows-Loader-Latest** artifact from the latest
-   [successful CI run](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml).
-   Inspect `STAGE.txt` and `SHA256SUMS.txt`; CI builds `payload/stage4_8.c`.
-2. Supply `EFI/Microsoft/Boot/bootmgfw.efi` and `EFI/Microsoft/Boot/BCD` on
-   your own test USB volume. These files are not included in this repository.
-3. If the console is healthy and you choose to run this limited build, launch
-   `PS4WindowsLoader-latest.bin`. Stage 4.8 writes `/mnt/usb0/PS4WL_STAGE48.LOG`
-   and exits before entering Boot Manager.
-4. Preserve the complete log, especially `PREFLIGHT48: image word=` lines.
-   Their starting offset is printed alongside them. Do not reuse earlier
-   artifacts containing the experimental `CR3` substitution.
+The [CI workflow](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml)
+builds Stage 4.8 as **PS4-Windows-Loader-Latest**. Its current binary is a
+preflight and does not run Boot Manager. Existing traces already contain both
+faulting instructions; no further hardware run is needed for them. Do not reuse
+earlier artifacts containing the experimental `CR3` substitution. Microsoft
+boot files are not included in this repository.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.
@@ -114,13 +111,13 @@ verify firmware behavior.
 
 ## Next milestones
 
-1. Analyze the second fault's instruction using the preflight byte trace;
-   investigate the reported console shutdown before resuming Boot Manager entry.
-   Never force-map over an occupied page.
-2. Model a truthful, stable physical memory map and required firmware tables;
-   the current process mappings and synthetic EFI descriptors are insufficient
-   for a Windows kernel handoff.
-3. Implement the remaining Boot Manager services as observed; reach
+1. Replace the user-process execution path with a platform-owned boot context
+   capable of executing privileged CPU instructions; review the shutdown before
+   resuming entry tests. See [Execution boundary](docs/EXECUTION_BOUNDARY.md).
+2. Model a truthful physical memory map and required firmware tables. The
+   current process mappings and synthetic EFI descriptors are insufficient for
+   a Windows kernel handoff. Never force-map over an occupied page.
+3. Implement the remaining Boot Manager services, then reach
    `winload.efi`, then kernel initialization.
 4. Bring up PS4 platform description, storage, USB input, framebuffer and
    other device support before claiming a usable Windows installation.

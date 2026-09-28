@@ -8,6 +8,12 @@ The project starts from a PS4 payload entry point after the console has already 
 
 The loader must not assume PC BIOS/UEFI services exist.
 
+Stage 4.8 showed that calling `bootmgfw.efi` inside a PS4 user process reaches
+instructions requiring processor privileges (`mov rax, cr3` and `rdmsr`).
+The active artifact therefore stops before EFI entry. See
+[Execution boundary](EXECUTION_BOUNDARY.md) for trace evidence and the required
+change in execution architecture.
+
 ## 2. Quiesce Orbis-owned hardware
 
 Before handing devices to another operating system, the loader will need a deterministic hardware state. Candidate tasks include:
@@ -63,8 +69,10 @@ The loader can enumerate the intended boot device and read a FAT EFI volume.
 ### M2 — PE/COFF parsed
 The loader validates and maps a known x86-64 EFI executable.
 
-### M3 — Microsoft Boot Manager entered
-Control reaches `bootmgfw.efi` without Linux or a hypervisor.
+### M3 — Microsoft Boot Manager entered (research milestone)
+Control reached `bootmgfw.efi` inside a PS4 process. The same run cannot
+complete privileged CPU operations; a platform-owned boot context is required
+before advancing to M4.
 
 ### M4 — Windows loader entered
 Control reaches `winload.efi`.
