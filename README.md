@@ -135,7 +135,10 @@ The [owned-memory backend and resident firmware substrate](docs/NATIVE_BACKEND.m
 now connects a kernel allocation adapter, per-page physical verification,
 resident firmware/media copies, an autonomous memory manager, and independent
 page tables in one preparation transaction. Host integration tests cover the
-pipeline and rollback. Firmware 13.52 symbol binding, a complete platform map,
+pipeline and rollback. An [enforced binding gate and source audit](docs/PS4_1352_BINDING.md) now reject
+unverified kernel calls, including the upstream 13.52 candidates. Exact ABI
+types and release ownership are checked in CI. Verified firmware 13.52 binding,
+a complete platform map,
 EFI protocol installation and CPU/device handoff remain unresolved. The new
 `PS4-Windows-Loader-Native-Core` artifact is a relocatable development object,
 **not a console payload**. No new console test is requested.

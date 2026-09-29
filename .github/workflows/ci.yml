@@ -125,6 +125,12 @@ jobs:
           git -C ps4-runtime rev-parse HEAD | tee PS4_RUNTIME_COMMIT.txt
       - name: Build PS4 freestanding runtime
         run: make -C ps4-runtime/lib
+      - name: Verify native allocator ABI against pinned runtime
+        run: |
+          mkdir -p build
+          gcc -std=gnu11 -Wall -Wextra -Werror -ffreestanding \
+            -Iloader/include -Ips4-runtime/linux/ps4-kexec-common \
+            -c tests/test_ps4_runtime_abi.c -o build/test-ps4-runtime-abi.o
       - name: Test standalone CPU log format on CI host
         run: |
           mkdir -p build

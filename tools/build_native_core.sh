@@ -4,14 +4,14 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 output=${1:-build/native-core}
 mkdir -p "$output"
-for unit in handoff paging cpu_state ps4_memory firmware_memory firmware_media native_workspace freestanding; do
+for unit in handoff paging cpu_state ps4_binding ps4_memory firmware_memory firmware_media native_workspace freestanding; do
     "$compiler" -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
         -ffreestanding -fno-builtin -fno-stack-protector -fno-common \
         -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -fPIE \
         -Iloader/include -c "loader/src/$unit.c" -o "$output/$unit.o"
 done
 ld -r "$output/handoff.o" "$output/paging.o" "$output/cpu_state.o" \
-    "$output/ps4_memory.o" "$output/firmware_memory.o" "$output/firmware_media.o" \
+    "$output/ps4_binding.o" "$output/ps4_memory.o" "$output/firmware_memory.o" "$output/firmware_media.o" \
     "$output/native_workspace.o" "$output/freestanding.o" -o "$output/ps4wl-native-core.o"
 nm -u "$output/ps4wl-native-core.o" > "$output/UNDEFINED-SYMBOLS.txt"
 if [ -s "$output/UNDEFINED-SYMBOLS.txt" ]; then

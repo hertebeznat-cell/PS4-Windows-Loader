@@ -46,6 +46,7 @@ typedef struct pwl_native_workspace {
 pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
                                           const pwl_native_request_t *request,
                                           pwl_native_workspace_t *workspace);
-void pwl_native_workspace_release(pwl_native_workspace_t *workspace);
+/* On release refusal the owner and spans remain intact for diagnosis/retry. */
+pwl_status_t pwl_native_workspace_release(pwl_native_workspace_t *workspace);
 
 #endif

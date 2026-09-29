@@ -1,7 +1,9 @@
 # Owned-memory backend and resident firmware substrate
 
 Status: implementation with host integration tests, **not hardware validated**.
-There is no new console payload in this change. Stage 4.8 remains preflight.
+Production memory calls are now blocked by an executable binding gate; firmware
+13.52 remains unverified. See the [binding audit](PS4_1352_BINDING.md) for exact
+missing evidence and public-source provenance. There is no new console payload. Stage 4.8 remains preflight.
 Do not send `ps4wl-native-core.o` to a console: it is a relocatable development
 object, without an entry point, EFI System Table, relocation/activation layer
 or CPU transition. No Windows boot or new hardware milestone is claimed.
@@ -27,13 +29,17 @@ would restore the incorrect process-context call; it does not activate this work
 ## What is now implemented
 
 `loader/src/ps4_memory.c` uses the actual kernel allocator ABI described by the
-pinned runtime: `kmem_alloc_contig`, `pmap_extract` and `kmem_free`. Its API takes
-**already resolved and verified** kernel symbols, the dereferenced `kernel_map`
-and `kernel_pmap_store`. It makes one `M_NOWAIT | M_ZERO` allocation with 16 KiB
-alignment, asks for WB memory below the low canonical identity limit, and checks
+pinned runtime: `kmem_alloc_contig`, `pmap_extract` and `kmem_free`. Its API describes
+resolved kernel symbols, the dereferenced `kernel_map` and `kernel_pmap_store`,
+but non-null pointers no longer authorize calls. `ps4_binding.c` refuses every
+production profile until target verification exists. Only a host-test build can
+exercise the allocator with synthetic callbacks. The allocator makes one
+`M_NOWAIT | M_ZERO` call with 16 KiB alignment, asks for WB memory between
+1 MiB and the low canonical identity limit, and checks
 both ends of every 4 KiB hardware page. It preserves the original allocation KVA
 and its size for release. Physical addresses are never synthesized from a KVA.
-Failure releases the original allocation; no retry loop or kernel patch is used.
+Validation failure releases the original allocation; no backend retry loop or
+kernel patch is used. M_NOWAIT does not eliminate internal VM locks/retries.
 The allocation remains owned until an explicit preparation-side release.
 
 `loader/src/native_workspace.c` connects that allocator to the rest of the
@@ -55,7 +61,10 @@ preparation flow in one transaction:
    pages have no leaf mappings. Reject unexpected mappings or permissions.
    This is a pre-activation check; hardware-set accessed/dirty bits are not
    accepted as fresh builder output.
-6. On any preparation failure, release the original KVA and clear the owner.
+6. On preparation failure, release the original KVA and clear the owner only
+   when release succeeds. If the binding/owner is invalid, return the cleanup
+   error and retain ownership. `kmem_free` returns void; no kernel free errno
+   or recovery from a non-returning kernel fault is claimed.
 
 The heap currently remains NX. Memory-type changes in the resident manager
 do not change PTE permissions. Before loading executable child images, the
@@ -132,10 +141,16 @@ sh tools/test_native_core.sh undefined  # UBSan if sandbox blocks LeakSanitizer
 sh tools/build_native_core.sh
 ```
 
-The integration test substitutes only the kernel allocator/extractor callbacks.
+The integration test uses an explicit hosted-only fixture build. A separate
+production-build test supplies fatal callbacks and proves that 13.52, older,
+unknown and host IDs all refuse before calling them. CI rejects the fixture
+macro in freestanding builds and checks exact C ABI compatibility with the
+pinned runtime header. The integration test substitutes allocator/extractor callbacks.
 It exercises the complete preparation pipeline with deliberately different KVA
 and PA values and a span crossing a 2 MiB boundary. It checks an unmapped 4 KiB
 subpage inside a 16 KiB allocation, original-KVA rollback, resident copies,
+low/unaligned/out-of-range PA, incorrect last-byte translations, absent free
+callbacks, refused release with retained ownership, idempotent cleanup,
 stack guards, unexpected permissions/mappings, descriptor exhaustion, map-key
 retry/retirement, media bounds and failure unwind. After preparation, memory
 and media operations must leave all kernel callback counters unchanged.

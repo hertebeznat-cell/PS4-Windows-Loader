@@ -93,6 +93,8 @@ allocation adapter, physical page checks, resident memory/media state and
 page-table construction. It is compiled/tested separately, with no Stage 4.8
 entry connection. The source audit and exact remaining links are documented
 there; its memory retirement function is not a platform ExitBootServices.
+The [13.52 memory binding gate](PS4_1352_BINDING.md) now prevents allocation
+and release through unverified symbols; there is no new console test.
 
 1. Separate the portable PE/COFF and EFI-table construction code from calls
    that depend on the live PS4 process. Keep the current preflight as the

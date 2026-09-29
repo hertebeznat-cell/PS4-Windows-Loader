@@ -15,12 +15,14 @@ static void copy_bytes(void *to, const void *from, size_t count)
     for (i = 0; i < count; ++i) d[i] = s[i];
 }
 
-void pwl_native_workspace_release(pwl_native_workspace_t *w)
+pwl_status_t pwl_native_workspace_release(pwl_native_workspace_t *w)
 {
-    if (w != NULL) {
-        pwl_ps4_arena_release(&w->arena);
-        *w = (pwl_native_workspace_t){0};
-    }
+    pwl_status_t status;
+    if (w == NULL) return PWL_ERR_INVALID_ARGUMENT;
+    status = pwl_ps4_arena_release(&w->arena);
+    if (status != PWL_OK) return status;
+    *w = (pwl_native_workspace_t){0};
+    return PWL_OK;
 }
 
 pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
@@ -34,6 +36,7 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
     size_t i, region = 0;
     pwl_status_t status;
     if (w == NULL || r == NULL || w->arena.kernel_address != 0 ||
+        w->arena.physical_address != 0 || w->arena.size != 0 || w->arena.used != 0 ||
         r->firmware == NULL || r->disk_image == NULL || r->image_handle == 0 ||
         r->table_pages < 4 || r->table_pages > PWL_NATIVE_MAX_TABLES ||
         r->disk_bytes % 512 ||
@@ -101,6 +104,9 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
                                             r->table_pages, &w->table_count);
     if (status == PWL_OK) return PWL_OK;
 failure:
-    pwl_native_workspace_release(w);
+    {
+        pwl_status_t cleanup = pwl_native_workspace_release(w);
+        if (cleanup != PWL_OK) return cleanup;
+    }
     return status;
 }

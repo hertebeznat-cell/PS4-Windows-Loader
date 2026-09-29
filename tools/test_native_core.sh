@@ -6,12 +6,26 @@ sanitizers=${1:-address,undefined}
 mkdir -p build
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+    loader/src/ps4_binding.c loader/src/ps4_memory.c tests/test_ps4_binding.c \
+    -o build/test-ps4-binding
+./build/test-ps4-binding
+# The fixture escape hatch must fail to compile into any freestanding object.
+if "$compiler" -std=c11 -ffreestanding -DPWL_PS4_MEMORY_HOST_TEST \
+    -Iloader/include -c loader/src/ps4_binding.c -o build/forbidden-host-binding.o \
+    2>build/host-binding-rejection.txt; then
+    echo 'Host memory fixture unexpectedly compiled freestanding' >&2
+    exit 1
+fi
+grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/handoff.c loader/src/firmware_memory.c loader/src/firmware_media.c \
     tests/test_firmware.c -o build/test-firmware
 ./build/test-firmware
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
-    loader/src/handoff.c loader/src/paging.c loader/src/ps4_memory.c \
+    -DPWL_PS4_MEMORY_HOST_TEST \
+    loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
     loader/src/firmware_memory.c loader/src/firmware_media.c loader/src/native_workspace.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace

@@ -23,6 +23,8 @@ independent mappings with stack guards. It must run while Orbis kernel memory
 services are still available. See [native backend](NATIVE_BACKEND.md) for the
 implementation, source audit and tests.
 
+The [13.52 binding gate](PS4_1352_BINDING.md) currently refuses production
+allocation before any kernel call. Host fixtures exercise the transaction.
 This transaction does not enter the prepared code. Verified target kernel
 bindings, the complete RAM/MMIO inventory, executable relocation and EFI table
 installation, PAT/MTRR checks, a recoverable CPU transition and device ownership

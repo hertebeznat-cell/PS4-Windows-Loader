@@ -7,16 +7,16 @@
 
 static struct {
     void *allocation;
-    uint64_t bytes, physical, bad_page;
+    uint64_t bytes, physical, bad_page, bad_byte;
     unsigned allocations, frees, extracts, fail;
 } kernel;
 
-static uint64_t allocate(void *map, uint64_t size, int flags, uint64_t low,
-                          uint64_t high, unsigned long alignment,
+static pwl_ps4_vm_u64_t allocate(void *map, pwl_ps4_vm_u64_t size, int flags,
+                          pwl_ps4_vm_u64_t low, pwl_ps4_vm_u64_t high, unsigned long alignment,
                           unsigned long boundary, char attribute)
 {
-    assert(map == &kernel && flags == 0x101 && low == 0);
-    assert(high == (UINT64_C(1) << 47) - 1 && alignment == 16384);
+    assert(map == &kernel && flags == 0x101 && low == 0x100000);
+    assert(high == (UINT64_C(1) << 47) && alignment == 16384);
     assert(boundary == 0 && attribute == 6);
     ++kernel.allocations;
     if (kernel.fail) return 0;
@@ -28,7 +28,7 @@ static uint64_t allocate(void *map, uint64_t size, int flags, uint64_t low,
     return (uint64_t)(uintptr_t)kernel.allocation;
 }
 
-static void release(void *map, uint64_t kva, uint64_t bytes)
+static void release(void *map, pwl_ps4_vm_u64_t kva, pwl_ps4_vm_u64_t bytes)
 {
     assert(map == &kernel && kva == (uint64_t)(uintptr_t)kernel.allocation);
     assert(kva != kernel.physical && bytes == kernel.bytes);
@@ -37,18 +37,19 @@ static void release(void *map, uint64_t kva, uint64_t bytes)
     kernel.allocation = NULL;
 }
 
-static uint64_t extract(void *pmap, uint64_t kva)
+static pwl_ps4_vm_u64_t extract(void *pmap, pwl_ps4_vm_u64_t kva)
 {
     uint64_t offset = kva - (uint64_t)(uintptr_t)kernel.allocation;
     assert(pmap == &kernel && offset < kernel.bytes);
     ++kernel.extracts;
     if (kernel.bad_page && offset / 4096 == kernel.bad_page / 4096) return 0;
+    if (kernel.bad_byte && offset == kernel.bad_byte) return kernel.physical + offset + 4096;
     return kernel.physical + offset;
 }
 
 static pwl_ps4_memory_api_t api(void)
 {
-    return (pwl_ps4_memory_api_t){&kernel, &kernel, allocate, release, extract};
+    return (pwl_ps4_memory_api_t){&kernel, &kernel, allocate, release, extract, 0};
 }
 
 static void test_owner(void)
@@ -68,6 +69,17 @@ static void test_owner(void)
     assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
     assert(kernel.frees == 1 && arena.kernel_address == 0);
     kernel.bad_page = 0;
+    kernel.bad_byte = 16383; /* Starts translate correctly, last byte does not. */
+    assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
+    assert(kernel.allocation == NULL && arena.kernel_address == 0);
+    kernel.bad_byte = 0;
+    kernel.physical = 0xfc000; /* Allocator violates requested low PA bound. */
+    assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
+    assert(kernel.allocation == NULL);
+    kernel.physical = 0x4000001; /* Unaligned physical result. */
+    assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
+    assert(kernel.allocation == NULL);
+    kernel.physical = 0x4000000;
     assert(pwl_ps4_arena_acquire(&a, 32768, &arena) == PWL_OK);
     assert(pwl_ps4_arena_acquire(&a, 32768, &arena) == PWL_ERR_INVALID_ARGUMENT);
     assert(pwl_ps4_arena_take(&arena, 4096, 4096, &span) == PWL_OK);
@@ -77,12 +89,32 @@ static void test_owner(void)
     assert(span.prepare_address == (unsigned char *)kernel.allocation + 16384);
     assert(pwl_ps4_arena_take(&arena, 16384, 4096, &span) == PWL_ERR_OUT_OF_RESOURCES);
     frees = kernel.frees;
-    pwl_ps4_arena_release(&arena);
-    pwl_ps4_arena_release(&arena);
+    arena.api.free = NULL;
+    assert(pwl_ps4_arena_release(&arena) == PWL_ERR_INVALID_ARGUMENT);
+    assert(arena.kernel_address == (uint64_t)(uintptr_t)kernel.allocation);
+    assert(arena.size == 32768 && kernel.frees == frees);
+    arena.api = a;
+    arena.api.firmware = PWL_PS4_FIRMWARE_1352;
+    assert(pwl_ps4_arena_release(&arena) == PWL_ERR_UNSUPPORTED);
+    assert(kernel.frees == frees && arena.size == 32768);
+    arena.api = a;
+    ++arena.size;
+    assert(pwl_ps4_arena_release(&arena) == PWL_ERR_INVALID_ARGUMENT);
+    --arena.size;
+    assert(pwl_ps4_arena_release(&arena) == PWL_OK);
+    assert(pwl_ps4_arena_release(&arena) == PWL_OK);
     assert(kernel.frees == frees + 1 && arena.kernel_address == 0);
     kernel.physical = (UINT64_C(1) << 47) - 16384;
     assert(pwl_ps4_arena_acquire(&a, 32768, &arena) == PWL_ERR_INVALID_ARGUMENT);
     assert(kernel.allocation == NULL);
+    assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_OK);
+    assert(arena.physical_address + arena.size == PWL_PS4_IDENTITY_LIMIT);
+    assert(pwl_ps4_arena_release(&arena) == PWL_OK);
+    assert(pwl_ps4_arena_release(NULL) == PWL_ERR_INVALID_ARGUMENT);
+    a.free = NULL;
+    frees = kernel.allocations;
+    assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
+    assert(kernel.allocations == frees); /* Cannot acquire without a free path. */
 }
 
 static uint64_t *leaf(pwl_native_workspace_t *w, uint64_t address)
@@ -118,6 +150,15 @@ static void test_pipeline(void)
     memset(firmware, 0xa5, sizeof(firmware));
     for (i = 0; i < sizeof(disk); ++i) disk[i] = (unsigned char)(i * 37);
     kernel.physical = 0x3ff8000; /* Cross a 2 MiB page-table boundary. */
+    a.firmware = PWL_PS4_FIRMWARE_1352;
+    allocations = kernel.allocations;
+    assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_ERR_UNSUPPORTED);
+    assert(w.arena.kernel_address == 0 && kernel.allocations == allocations);
+    a = api();
+    kernel.fail = 1;
+    assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_ERR_OUT_OF_RESOURCES);
+    assert(w.arena.kernel_address == 0 && kernel.allocations == allocations + 1);
+    kernel.fail = 0;
     assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_OK);
     assert(w.table_count > 4);
     assert(w.firmware.prepare_address != (void *)(uintptr_t)w.firmware.physical_address);
@@ -163,7 +204,12 @@ static void test_pipeline(void)
     assert(pwl_fw_allocate_pages(&d->memory, PWL_ALLOCATE_ANY, 2, 1, &address) == PWL_EFI_ACCESS_DENIED);
     assert(kernel.allocations == allocations && kernel.frees == frees && kernel.extracts == extracts);
     /* No CPU switch occurred; this is still a preparation-side abort/cleanup. */
-    pwl_native_workspace_release(&w);
+    w.arena.api.free = NULL;
+    assert(pwl_native_workspace_release(&w) == PWL_ERR_INVALID_ARGUMENT);
+    assert(w.table_count > 4 && w.data.prepare_address == d);
+    assert(kernel.frees == frees && kernel.allocation != NULL);
+    w.arena.api = a;
+    assert(pwl_native_workspace_release(&w) == PWL_OK);
     assert(kernel.frees == frees + 1 && kernel.allocation == NULL && w.table_count == 0);
 
     r.table_pages = 4; /* Cannot cover this crossing + 3 MiB pool. */

@@ -3,7 +3,8 @@
 Status: portable validation plus an [owned-memory preparation backend and
 resident firmware substrate](NATIVE_BACKEND.md). The backend needs verified
 kernel symbol bindings; privileged entry, recovery and Windows boot are not
-implemented. The published Stage 4.8 payload remains preflight only.
+implemented. The [13.52 binding audit](PS4_1352_BINDING.md) records an enforced
+refusal, not a verified allocator. The published Stage 4.8 payload remains preflight only.
 
 The returning hardware context probe observed CR0 `0x8005003B`, CR3
 `0x0B28B000`, CR4 `0x406F0` and EFER `0xD01` in the PS4 kernel callback.
