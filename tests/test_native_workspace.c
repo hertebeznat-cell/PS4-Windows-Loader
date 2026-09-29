@@ -1,4 +1,5 @@
 #include "pwl_native_workspace.h"
+#include "pe_fixture.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -140,7 +141,7 @@ static void test_pipeline(void)
     pwl_ps4_memory_api_t a = api();
     unsigned char firmware[4097], disk[16384], output[512];
     pwl_native_request_t r = {firmware, sizeof(firmware), disk, sizeof(disk),
-                              3 * 1024 * 1024, 16384, 16, 0x1234};
+                              3 * 1024 * 1024, 16384, 16, 0x1234, NULL, 0};
     pwl_native_data_t *d;
     pwl_efi_memory_descriptor_t map[PWL_FW_MAX_DESCRIPTORS];
     uint64_t key = 0, address = 0, saved;
@@ -171,18 +172,18 @@ static void test_pipeline(void)
     assert((*leaf(&w, w.media.physical_address) & (UINT64_C(1) << 63)) != 0);
     saved = *leaf(&w, w.media.physical_address);
     *leaf(&w, w.media.physical_address) |= 2;
-    assert(pwl_x64_identity_mappings_validate(w.mappings, 6, w.tables, w.table_count) != PWL_OK);
+    assert(pwl_x64_identity_mappings_validate(w.mappings, w.mapping_count, w.tables, w.table_count) != PWL_OK);
     *leaf(&w, w.media.physical_address) = saved;
     *leaf(&w, w.stack.physical_address - 4096) = (w.stack.physical_address - 4096) | 3;
-    assert(pwl_x64_identity_mappings_validate(w.mappings, 6, w.tables, w.table_count) != PWL_OK);
+    assert(pwl_x64_identity_mappings_validate(w.mappings, w.mapping_count, w.tables, w.table_count) != PWL_OK);
     *leaf(&w, w.stack.physical_address - 4096) = 0;
-    assert(pwl_x64_identity_mappings_validate(w.mappings, 6, w.tables, w.table_count) == PWL_OK);
+    assert(pwl_x64_identity_mappings_validate(w.mappings, w.mapping_count, w.tables, w.table_count) == PWL_OK);
     w.tables[0].entries[1] = w.tables[0].entries[0]; /* Reused subtree/alias. */
-    assert(pwl_x64_identity_mappings_validate(w.mappings, 6, w.tables, w.table_count) != PWL_OK);
+    assert(pwl_x64_identity_mappings_validate(w.mappings, w.mapping_count, w.tables, w.table_count) != PWL_OK);
     w.tables[0].entries[1] = 0;
     saved = *leaf(&w, w.media.physical_address);
     *leaf(&w, w.media.physical_address) &= ~(UINT64_C(1) << 63);
-    assert(pwl_x64_identity_mappings_validate(w.mappings, 6, w.tables, w.table_count) != PWL_OK);
+    assert(pwl_x64_identity_mappings_validate(w.mappings, w.mapping_count, w.tables, w.table_count) != PWL_OK);
     *leaf(&w, w.media.physical_address) = saved;
 
     d = w.data.prepare_address;
@@ -221,10 +222,42 @@ static void test_pipeline(void)
     assert(kernel.allocations == allocations);
 }
 
+static void test_boot_image(void)
+{
+    pwl_native_workspace_t w = {0};
+    pwl_ps4_memory_api_t a = api();
+    unsigned char firmware[4096] = {0}, disk[512] = {0}, image[PE_FIXTURE_BYTES];
+    pwl_native_request_t r = {firmware, sizeof(firmware), disk, sizeof(disk),
+        65536, 16384, 16, 0x1234, image, sizeof(image)};
+    unsigned frees = kernel.frees, allocations;
+    kernel.physical = 0x4000000;
+    pe_fixture(image);
+    assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_OK);
+    assert(w.region_count == 9 && w.mapping_count == 10);
+    assert(w.boot_image.entry_address == w.boot.physical_address + 0x1000);
+    assert(pe_get64((unsigned char *)w.boot.prepare_address + 0x2000) ==
+        w.boot.physical_address + 0x1010);
+    assert((*leaf(&w, w.boot_image.entry_address) & (UINT64_C(1) << 63 | 2)) == 0);
+    assert((*leaf(&w, w.boot.physical_address + 0x2000) & (UINT64_C(1) << 63 | 2)) ==
+        (UINT64_C(1) << 63 | 2));
+    assert((*leaf(&w, w.boot.physical_address) & (UINT64_C(1) << 63)) != 0);
+    assert(pwl_native_workspace_release(&w) == PWL_OK);
+    assert(kernel.frees == frees + 1 && w.boot_image.entry_address == 0);
+    pe16(image + 0x608, 0x3000); /* Relocation fails after kernel allocation. */
+    assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_ERR_UNSUPPORTED);
+    assert(kernel.frees == frees + 2 && kernel.allocation == NULL);
+    assert(w.boot.prepare_address == NULL && w.mapping_count == 0);
+    pe_fixture(image); pe16(image + PE_OPT + 68, 3);
+    allocations = kernel.allocations;
+    assert(pwl_native_workspace_prepare(&a, &r, &w) == PWL_ERR_UNSUPPORTED);
+    assert(kernel.allocations == allocations); /* Invalid layout: no allocation. */
+}
+
 int main(void)
 {
     test_owner();
     test_pipeline();
+    test_boot_image();
     puts("native workspace: owned PA/KVA, resident services, guarded mappings and rollback passed");
     return 0;
 }

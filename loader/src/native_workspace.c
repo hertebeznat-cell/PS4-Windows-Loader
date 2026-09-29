@@ -29,11 +29,11 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
                                           const pwl_native_request_t *r,
                                           pwl_native_workspace_t *w)
 {
-    uint64_t sizes[6], total = 2 * PWL_PAGE_SIZE, allocation;
-    pwl_owned_span_t *spans[6], guards[2];
+    uint64_t sizes[7], total = 2 * PWL_PAGE_SIZE, allocation;
+    pwl_owned_span_t *spans[7], guards[2];
     pwl_native_data_t *data;
-    uint64_t cacheability[PWL_NATIVE_REGION_COUNT];
-    size_t i, region = 0;
+    uint64_t cacheability[PWL_NATIVE_MAX_REGIONS];
+    size_t i, region = 0, span_count = 6;
     pwl_status_t status;
     if (w == NULL || r == NULL || w->arena.kernel_address != 0 ||
         w->arena.physical_address != 0 || w->arena.size != 0 || w->arena.used != 0 ||
@@ -47,7 +47,14 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
         !rounded(r->heap_bytes, PWL_PAGE_SIZE, &sizes[5]))
         return PWL_ERR_INVALID_ARGUMENT;
     sizes[2] = r->table_pages * PWL_PAGE_SIZE;
-    for (i = 0; i < 6; ++i) {
+    if ((r->boot_image == NULL) != (r->boot_image_bytes == 0))
+        return PWL_ERR_INVALID_ARGUMENT;
+    if (r->boot_image) {
+        status = pwl_pe_efi_size(r->boot_image, r->boot_image_bytes, &sizes[6]);
+        if (status != PWL_OK) return status;
+        span_count = 7;
+    }
+    for (i = 0; i < span_count; ++i) {
         if (sizes[i] > UINT64_MAX - total) return PWL_ERR_INVALID_ARGUMENT;
         total += sizes[i];
     }
@@ -58,7 +65,8 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
     if (status != PWL_OK) return status;
     spans[0] = &w->firmware; spans[1] = &w->data; spans[2] = &w->tables_span;
     spans[3] = &w->stack; spans[4] = &w->media; spans[5] = &w->heap;
-    for (i = 0; i < 6; ++i) {
+    spans[6] = &w->boot;
+    for (i = 0; i < span_count; ++i) {
         if (i == 3) {
             status = pwl_ps4_arena_take(&w->arena, PWL_PAGE_SIZE,
                                        PWL_PAGE_SIZE, &guards[0]);
@@ -69,10 +77,11 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
         status = pwl_ps4_arena_take(&w->arena, sizes[i], PWL_PAGE_SIZE, spans[i]);
         if (status != PWL_OK) goto failure;
         w->regions[region++] = (pwl_phys_region_t){ spans[i]->physical_address,
-            spans[i]->size, i == 0 ? PWL_MEMORY_LOADER_CODE :
+            spans[i]->size, i == 0 || i == 6 ? PWL_MEMORY_LOADER_CODE :
                            i == 5 ? PWL_MEMORY_FREE : PWL_MEMORY_LOADER_DATA };
-        w->mappings[i] = (pwl_x64_identity_range_t){spans[i]->physical_address,
-                            spans[i]->size, i != 0 && i != 4, i == 0};
+        if (i < 6)
+            w->mappings[w->mapping_count++] = (pwl_x64_identity_range_t){
+                spans[i]->physical_address, spans[i]->size, i != 0 && i != 4, i == 0};
         if (i == 3) {
             status = pwl_ps4_arena_take(&w->arena, PWL_PAGE_SIZE,
                                        PWL_PAGE_SIZE, &guards[1]);
@@ -84,10 +93,19 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
     /* 16 KiB tail padding stays owned but outside the advertised pool/map. */
     copy_bytes(w->firmware.prepare_address, r->firmware, r->firmware_bytes);
     copy_bytes(w->media.prepare_address, r->disk_image, r->disk_bytes);
+    if (r->boot_image) {
+        status = pwl_pe_load_efi(r->boot_image, r->boot_image_bytes,
+            w->boot.prepare_address, (size_t)w->boot.size,
+            w->boot.physical_address, &w->boot_image);
+        if (status != PWL_OK) goto failure;
+        for (i = 0; i < w->boot_image.range_count; ++i)
+            w->mappings[w->mapping_count++] = w->boot_image.ranges[i];
+    }
+    w->region_count = region;
     data = w->data.prepare_address;
-    for (i = 0; i < PWL_NATIVE_REGION_COUNT; ++i) cacheability[i] = 8; /* WB allocation */
+    for (i = 0; i < region; ++i) cacheability[i] = 8; /* WB allocation */
     status = pwl_fw_memory_init(&data->memory, w->regions, cacheability,
-                                PWL_NATIVE_REGION_COUNT, r->image_handle);
+                                region, r->image_handle);
     if (status != PWL_OK) goto failure;
     /* Firmware lifetime is distinct from the later Microsoft loader image. */
     data->memory.entries[0].descriptor.type = 3; /* EfiBootServicesCode */
@@ -100,7 +118,7 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
         w->tables[i].entries = (uint64_t *)((unsigned char *)w->tables_span.prepare_address +
                                                                     i * PWL_PAGE_SIZE);
     }
-    status = pwl_x64_identity_tables_build(w->mappings, 6, w->tables,
+    status = pwl_x64_identity_tables_build(w->mappings, w->mapping_count, w->tables,
                                             r->table_pages, &w->table_count);
     if (status == PWL_OK) return PWL_OK;
 failure:

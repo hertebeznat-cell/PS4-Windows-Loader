@@ -131,6 +131,11 @@ are in the probe documentation. It is not a Windows launcher.
 The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
 a privileged backend must establish before any further Boot Manager entry.
 
+The [native EFI PE mapper](docs/NATIVE_PE_LOADER.md) now copies and relocates
+an optional EFI application into the native workspace and builds per-section
+RX/RW-NX mappings. Synthetic integration tests verify physical relocations and
+rollback. No Microsoft image execution or new console payload is claimed.
+
 The [owned-memory backend and resident firmware substrate](docs/NATIVE_BACKEND.md)
 now connects a kernel allocation adapter, per-page physical verification,
 resident firmware/media copies, an autonomous memory manager, and independent

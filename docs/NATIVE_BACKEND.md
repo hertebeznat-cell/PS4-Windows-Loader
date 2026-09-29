@@ -26,6 +26,14 @@ Neither `pwl_boot_windows()` nor the new preparation API is called by Stage 4.8.
 The former still returns `PWL_ERR_UNSUPPORTED`. Removing the preflight macro
 would restore the incorrect process-context call; it does not activate this work.
 
+## Native EFI image preparation
+
+The workspace now optionally maps and relocates an AMD64 EFI application into
+its own arena and includes image-section permissions in the independent page
+tables. See [Native PE loader](NATIVE_PE_LOADER.md) for the API, restrictions
+and tests. This prepares image bytes and mappings, without entering the image
+or bypassing the unverified 13.52 binding.
+
 ## What is now implemented
 
 `loader/src/ps4_memory.c` uses the actual kernel allocator ABI described by the
@@ -56,7 +64,7 @@ preparation flow in one transaction:
    pointers or process handles. The memory map covers this owned arena only;
    it is **not** the PS4 platform memory map. Tail alignment padding stays owned
    and unadvertised. Unknown RAM/MMIO is not made available for allocations.
-5. Construct and independently walk four-level tables for **all six** spans.
+5. Construct and independently walk four-level tables for **all six** resident spans and the optional EFI image sections.
    Code is RX, media is read-only NX, data/pool/tables/stack are RW NX. Guard
    pages have no leaf mappings. Reject unexpected mappings or permissions.
    This is a pre-activation check; hardware-set accessed/dirty bits are not
@@ -128,7 +136,7 @@ Audited runtime commit:
 The immediate blocker to running this backend on the PS4 is the absence of a
 verified kernel-symbol binding and preparation-context contract on firmware
 13.52. Beyond it, the independent blockers are a trustworthy RAM/MMIO inventory,
-complete resident EFI tables/protocols and PE relocation, a recoverable native
+complete resident EFI tables/protocols and firmware relocation, a recoverable native
 CPU/exception context, AP/IRQ/device/DMA ownership, validated ACPI and Windows
 storage/device support. The photographed CR3 cannot establish any of these.
 One more short callback would not resolve them all.

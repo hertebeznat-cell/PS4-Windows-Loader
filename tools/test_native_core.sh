@@ -24,7 +24,13 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
 ./build/test-firmware
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+    loader/src/main.c loader/src/pe_loader.c tests/test_pe_loader.c \
+    -o build/test-pe-loader
+./build/test-pe-loader
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     -DPWL_PS4_MEMORY_HOST_TEST \
+    loader/src/main.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
     loader/src/firmware_memory.c loader/src/firmware_media.c loader/src/native_workspace.c \
     tests/test_native_workspace.c -o build/test-native-workspace

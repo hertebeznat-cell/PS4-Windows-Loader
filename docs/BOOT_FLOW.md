@@ -25,8 +25,10 @@ implementation, source audit and tests.
 
 The [13.52 binding gate](PS4_1352_BINDING.md) currently refuses production
 allocation before any kernel call. Host fixtures exercise the transaction.
-This transaction does not enter the prepared code. Verified target kernel
-bindings, the complete RAM/MMIO inventory, executable relocation and EFI table
+The transaction can now [map and relocate an optional EFI application](NATIVE_PE_LOADER.md)
+and map its sections with separate code/data permissions. It does not enter it.
+Verified target kernel bindings, the complete RAM/MMIO inventory, resident
+firmware relocation and EFI table
 installation, PAT/MTRR checks, a recoverable CPU transition and device ownership
 remain required. The published payload does not call this preparation API.
 

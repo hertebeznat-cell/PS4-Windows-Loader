@@ -3,9 +3,10 @@
 
 #include "pwl_ps4_memory.h"
 #include "pwl_firmware.h"
+#include "pwl_pe_loader.h"
 
 #define PWL_NATIVE_MAX_TABLES 128U
-#define PWL_NATIVE_REGION_COUNT 8U
+#define PWL_NATIVE_MAX_REGIONS 9U
 
 typedef struct pwl_native_request {
     /* Resident firmware blob only; copying does NOT relocate PE/ELF code. */
@@ -17,6 +18,9 @@ typedef struct pwl_native_request {
     uint64_t stack_bytes;
     size_t table_pages;
     uint64_t image_handle;
+    /* Optional AMD64 EFI application. Copied and relocated, never entered. */
+    const void *boot_image;
+    size_t boot_image_bytes;
 } pwl_native_request_t;
 
 typedef struct pwl_native_data {
@@ -29,9 +33,12 @@ typedef struct pwl_native_data {
  */
 typedef struct pwl_native_workspace {
     pwl_ps4_arena_t arena;
-    pwl_owned_span_t firmware, data, tables_span, stack, media, heap;
-    pwl_phys_region_t regions[PWL_NATIVE_REGION_COUNT];
-    pwl_x64_identity_range_t mappings[6];
+    pwl_owned_span_t firmware, data, tables_span, stack, media, heap, boot;
+    pwl_pe_loaded_t boot_image;
+    pwl_phys_region_t regions[PWL_NATIVE_MAX_REGIONS];
+    size_t region_count;
+    pwl_x64_identity_range_t mappings[6 + PWL_PE_MAX_RANGES];
+    size_t mapping_count;
     pwl_x64_table_page_t tables[PWL_NATIVE_MAX_TABLES];
     size_t table_count;
 } pwl_native_workspace_t;
@@ -39,7 +46,9 @@ typedef struct pwl_native_workspace {
 /* Performs allocation -> physical verification -> resident copies -> memory
  * and media initialization -> independent page-table construction. Stack guard
  * pages are owned/reserved but unmapped. All failures unwind the kernel owner.
- * Does NOT switch CR3, install an EFI System Table, call code, relocate a blob,
+ * Relocates the optional EFI image to its owned PA and maps code/data with
+ * section permissions. The firmware blob still needs its own relocation.
+ * Does NOT switch CR3, install an EFI System Table, call code,
  * or provide a complete machine memory map. Data pointers/callback relocation,
  * AP/IRQ/DMA state, PAT/MTRR and recoverable CPU transition are still required.
  */
