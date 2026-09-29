@@ -14,6 +14,20 @@ The active artifact therefore stops before EFI entry. See
 [Execution boundary](EXECUTION_BOUNDARY.md) for trace evidence and the required
 change in execution architecture.
 
+### Resident preparation before displacing Orbis
+
+`pwl_native_workspace_prepare` now acquires an arena through a supplied kernel
+allocator binding, verifies physical translations, copies firmware and a disk
+image into that arena, initializes resident memory/media state and builds
+independent mappings with stack guards. It must run while Orbis kernel memory
+services are still available. See [native backend](NATIVE_BACKEND.md) for the
+implementation, source audit and tests.
+
+This transaction does not enter the prepared code. Verified target kernel
+bindings, the complete RAM/MMIO inventory, executable relocation and EFI table
+installation, PAT/MTRR checks, a recoverable CPU transition and device ownership
+remain required. The published payload does not call this preparation API.
+
 ## 2. Quiesce Orbis-owned hardware
 
 Before handing devices to another operating system, the loader will need a deterministic hardware state. Candidate tasks include:

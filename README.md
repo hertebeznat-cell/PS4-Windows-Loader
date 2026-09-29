@@ -40,7 +40,7 @@ It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 | Allocate a page at the requested `0x00102000` | Succeeded in an earlier Stage 4.8 entry trace |
 | Stage 4.8 aligned 16 KiB backing window | Earlier entry trace mapped it at `0x00100000`; native page size reported as 16 KiB |
 | Current preflight and CPU probe | Both logged identical CPU flags; preflight mapped `bootmgfw.efi` and stopped before entry |
-| Returning CPU context probe | Hardware notification reports that its CPL0 callback completed and returned to CPL3; register values in USB log await review |
+| Returning CPU context probe | CPL0 callback returned to CPL3; CR0/CR3/CR4/EFER were captured from on-screen notifications and are recorded in `docs/CONTEXT_PROBE.md` |
 | Execution after the earlier successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
 | Boot Manager loads `winload.efi` / Windows kernel | Not reached |
 
@@ -130,6 +130,15 @@ are in the probe documentation. It is not a Windows launcher.
 
 The [native EFI handoff contract](docs/EFI_HANDOFF_CONTRACT.md) documents what
 a privileged backend must establish before any further Boot Manager entry.
+
+The [owned-memory backend and resident firmware substrate](docs/NATIVE_BACKEND.md)
+now connects a kernel allocation adapter, per-page physical verification,
+resident firmware/media copies, an autonomous memory manager, and independent
+page tables in one preparation transaction. Host integration tests cover the
+pipeline and rollback. Firmware 13.52 symbol binding, a complete platform map,
+EFI protocol installation and CPU/device handoff remain unresolved. The new
+`PS4-Windows-Loader-Native-Core` artifact is a relocatable development object,
+**not a console payload**. No new console test is requested.
 
 Use dedicated external test media. This experimental payload may hang or crash
 the console. The internal system drive is outside the test plan.

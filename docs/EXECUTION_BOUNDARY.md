@@ -88,6 +88,12 @@ replace the EFI handoff or remove the firmware layer's process dependencies.
 
 ## Remaining implementation
 
+The [native preparation transaction](NATIVE_BACKEND.md) now joins a kernel
+allocation adapter, physical page checks, resident memory/media state and
+page-table construction. It is compiled/tested separately, with no Stage 4.8
+entry connection. The source audit and exact remaining links are documented
+there; its memory retirement function is not a platform ExitBootServices.
+
 1. Separate the portable PE/COFF and EFI-table construction code from calls
    that depend on the live PS4 process. Keep the current preflight as the
    default artifact while the execution architecture is reviewed.

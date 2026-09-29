@@ -84,6 +84,30 @@ pwl_status_t pwl_x64_handoff_tables_build(
     pwl_x64_table_page_t *tables, size_t table_capacity,
     size_t *table_count_out);
 
+/* General owned-RAM mappings for resident firmware code/data/media, beyond
+ * the earlier image+stack-only contract. Sorted, disjoint identity ranges;
+ * cache encoding is fixed to PAT index 0. The backend must establish that
+ * index 0 is WB and the effective MTRR type is compatible before activation.
+ * Table pages must occur in a writable NX range and are never user mappings.
+ * Validation is pre-activation: fresh entries only, including clear A/D bits.
+ */
+typedef struct pwl_x64_identity_range {
+    uint64_t base;
+    uint64_t size;
+    unsigned writable;
+    unsigned executable;
+} pwl_x64_identity_range_t;
+
+#define PWL_X64_MAX_IDENTITY_TABLES 4096U
+
+pwl_status_t pwl_x64_identity_tables_build(
+    const pwl_x64_identity_range_t *ranges, size_t range_count,
+    pwl_x64_table_page_t *tables, size_t table_capacity,
+    size_t *table_count_out);
+pwl_status_t pwl_x64_identity_mappings_validate(
+    const pwl_x64_identity_range_t *ranges, size_t range_count,
+    const pwl_x64_table_page_t *tables, size_t table_count);
+
 /* UEFI 2.x EFI_MEMORY_DESCRIPTOR version 1, 40 bytes on x86-64. */
 typedef struct pwl_efi_memory_descriptor {
     uint32_t type;

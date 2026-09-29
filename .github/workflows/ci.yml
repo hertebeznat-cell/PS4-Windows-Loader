@@ -82,6 +82,20 @@ jobs:
           ./build/test-pe
       - name: Test CPU log analysis
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_cpu_log.py
+      - name: Test owned native workspace and resident firmware services
+        env:
+          CC: clang
+        run: sh tools/test_native_core.sh
+      - name: Build closed freestanding native core
+        env:
+          CC: clang
+        run: sh tools/build_native_core.sh
+      - name: Upload native development core (not a console payload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Native-Core
+          path: build/native-core/
+          retention-days: 30
       - name: Test returning context probe without kernel entry
         run: |
           clang -std=c11 -Wall -Wextra -Wpedantic -Werror \
