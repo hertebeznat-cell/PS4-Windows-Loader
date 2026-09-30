@@ -58,3 +58,33 @@ The uploaded file removes the uncertainty about the artifact to inspect. It
 does not establish that its bytes match the live installed image, nor supply a
 kernel dump. No kernel reads, allocations, CPU-control writes or Windows entry
 were attempted as part of this offline analysis.
+
+## Internal image extraction and syscall registration
+
+Further offline review identified a zlib stream at outer file offset `0x6900`,
+length 264595 (length DWORD at `0x47294`). Python's zlib decoder verified the
+stream, producing 636760 bytes. Internal SHA-256:
+`4e2864fb568707470bbc0dcf28ade7ed2096c3ea42ea87dd5ff13613db91abee`.
+
+`tools/inspect_goldhen.py goldhen.bin --extract-to inner.bin` reproduces this
+extraction for the exact reviewed input only. It refuses different hashes,
+invalid streams and existing output files. No payload code is executed.
+The proprietary output is not committed. Extraction and modified-input refusal
+were checked locally.
+
+Offsets in the following observations refer to the **decompressed image**:
+
+- Initialization at `0x25F8` calls syscall registration at `0x244E`.
+- Registration loads the handler from internal global `0x9B8A0`, sets syscall
+  number 11 and argument count 2, and calls the entry writer at `0x2410`.
+- The entry writer uses a 48-byte stride from global `0x9B8C0`, zeroes the entry,
+  stores argument count at +0, handler pointer at +8 and DWORD 1 at +44.
+- The resolver at `0x12EB3` loads a table DWORD at stack offset `0x124`, adds
+  the proposed kernel base and stores it to `0x9B8A0`. Thus the registered
+  syscall-11 target is resolved from a kernel-offset table; registration itself
+  does not supply the target function body.
+
+This narrows the next task to the selected table value, its exact role and the
+installed kernel handler implementation. The entry writer's CR0 writes are
+observations of GoldHEN code, not operations added to our loader. No allocation
+payload is authorized by this analysis, and the production binding stays refused.
