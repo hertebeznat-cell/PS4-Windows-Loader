@@ -310,6 +310,42 @@ static void test_resident(void)
     assert(kernel.allocations==allocations);
 }
 
+static void test_resident_boot_image(void)
+{
+    pwl_native_workspace_t w={0};
+    pwl_ps4_memory_api_t a=api();
+    unsigned char disk[512]={0}, image[PE_FIXTURE_BYTES];
+    pwl_native_request_t r={NULL,0,disk,sizeof(disk),65536,65536,16,0x1234,
+                            image,sizeof(image)};
+    kernel.physical=UINT64_C(0x27a300000);
+    pe_fixture(image);
+    unsigned frees=kernel.frees;
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_OK);
+    assert(w.region_count==9 && w.mapping_count==6+w.boot_image.range_count);
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    assert(pe_get64((unsigned char *)w.boot.prepare_address+0x2000)==
+           w.boot.physical_address+0x1010);
+    uint64_t entry=w.boot_image.entry_address;
+    w.boot_image.entry_address=w.boot.physical_address; /* Header is NX. */
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    w.boot_image.entry_address=entry;
+    w.boot_image.ranges[0].size+=PWL_PAGE_SIZE;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    w.boot_image.ranges[0].size-=PWL_PAGE_SIZE;
+    w.mappings[6].writable=1;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    w.mappings[6].writable=0;
+    uint64_t saved=*leaf(&w,entry);
+    *leaf(&w,entry)|=2; /* Executable application page must not be writable. */
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    *leaf(&w,entry)=saved;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    assert(pwl_native_workspace_release(&w)==PWL_OK && kernel.frees==frees+1);
+    pe16(image+0x608,0x3000);
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_ERR_UNSUPPORTED);
+    assert(!kernel.allocation && kernel.frees==frees+2);
+}
+
 int main(void)
 {
     resident_image=resident_fixture();
@@ -317,6 +353,7 @@ int main(void)
     test_pipeline();
     test_boot_image();
     test_resident();
+    test_resident_boot_image();
     puts("native workspace: owned PA/KVA, resident services, guarded mappings and rollback passed");
     return 0;
 }

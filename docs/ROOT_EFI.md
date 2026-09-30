@@ -41,6 +41,32 @@ until the file is retrieved in Windows.
 
 Expected: `rc=0 stage=5 error=0`, `status=0 switched=1 restored=1 released=1`,
 `passed_mask=1ff last_call=9 code_unlock=0 code_release=0`. All nine checks run
-in one invocation. This new integration has not yet run on PS4. A crash remains
-possible; do not repeat a hung run. The prior root-clone and process-only
+in one invocation. The hardware run below completed on PS4. Do not repeat it merely to
+collect another report. The prior root-clone and process-only
 resident/stack checks do not need repeating.
+
+
+## Retrieved hardware report — 1 October 2026 (Samara)
+
+The user supplied `PWL_EFI.TXT` from Windows with build
+`31140d356b8c429596b25f000c22d721a5ec0db5`. It records
+`rc=0 stage=5 error=0`, `status=0 switched=1 restored=1 released=1`,
+`passed_mask=1ff last_call=9 code_unlock=0 code_release=0`.
+The root changed from `0x0cf0a000` to `0x21098000` and back; the original
+stack address was restored. Exit status `0x8000000000000003` is the expected
+unsupported response, with `synthetic_map=1 windows_called=0`.
+
+The supplied `PS4WL_TRANSITION.LOG` independently identifies the earlier
+root-clone build `f4d0d840318d99945b6cfa10145ebb51d0422451` and its successful
+return. Retrieval of these two complete reports establishes persistence for
+those runs. The separate `PWL_USB.TXT` contains the marker followed by NUL
+bytes, without the existing-file diagnostic's success record; that diagnostic
+is not confirmed. Do not infer its failure mechanism from the bytes alone.
+
+Native preparation now accepts a resident image and an EFI application in
+the same owned arena, instead of rejecting that combination during the
+resident environment audit. The audit includes the application's complete
+range coverage, owned addresses, executable entry and section permissions.
+Automated host checks cover this combination and rollback above 4 GiB.
+This closes a preparation blocker; it does not install the remaining EFI
+protocols, activate the independent root or enter Boot Manager.

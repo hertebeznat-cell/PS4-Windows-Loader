@@ -257,9 +257,9 @@ Photographs confirm active root `0x0CF0A000`, clone root `0x558D8000`, restorati
 of the original root and stack, and return from release. It uses the live direct
 map (indices 436/348), so the kernel root may differ from the active process
 root. No emulator was used; USB logging is optional. Do not repeat this check.
-The next milestone is resident EFI callback execution with a verified return
-under identical mappings. Independent EFI mappings and Windows Boot Manager
-entry remain untested.
+The resident EFI callback execution under identical mappings also passed;
+its complete report was retrieved in Windows. Independent EFI mappings and
+Windows Boot Manager entry in this native context remain untested.
 
 
 The [USB-only readback check](docs/USB_LOG_CHECK.md) investigates the reported
@@ -269,11 +269,18 @@ record. It does not execute a CPU transition or allocate kernel memory.
 The physical USB persistence issue remains unresolved until the file is retrieved.
 
 
-The [returning root EFI integration](docs/ROOT_EFI.md) is the next untested
-console variant. It executes all nine copied resident EFI callbacks under an
+The [returning root EFI integration](docs/ROOT_EFI.md) passed on PS4 in build
+`31140d3`: all nine callbacks, root/stack restoration and cleanup succeeded. It executes all nine copied resident EFI callbacks under an
 identical copy of the active root with the temporary stack and restores the
 original context. Its memory descriptors remain synthetic; Microsoft code is
 not entered. FAT32 reporting uses `PWL_EFI.TXT`, selected by exact USB marker
 identity, with file/directory synchronization and readback. Windows label
 `WINDOWS` is recorded as the user-supplied label, not independently verified.
 Internal file checks do not establish post-removal persistence.
+
+
+Native preparation now supports the resident services and a relocated EFI
+application together in one arena. The combined audit checks the application
+entry and all section mappings, including RX code and RW/NX data. This is a
+preparation implementation, not a new console launcher. No repetition of the
+completed returning checks is requested.

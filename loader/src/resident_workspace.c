@@ -56,8 +56,10 @@ pwl_status_t pwl_native_resident_environment_validate(
 {
     if (!w || pwl_resident_image_validate(image)!=PWL_OK ||
         !w->arena.kernel_address || !w->arena.size ||
-        w->arena.used>w->arena.size || w->boot.size ||
-        w->region_count!=8 || w->mapping_count!=6 ||
+        w->arena.used>w->arena.size ||
+        w->region_count!=(w->boot.size ? 9U : 8U) ||
+        w->boot_image.range_count>PWL_PE_MAX_RANGES ||
+        w->mapping_count!=6+w->boot_image.range_count ||
         w->table_count<4 || w->table_count>PWL_NATIVE_MAX_TABLES)
         return PWL_ERR_INVALID_ARGUMENT;
     const pwl_owned_span_t *spans[]={&w->firmware,&w->data,&w->tables_span,
@@ -72,6 +74,45 @@ pwl_status_t pwl_native_resident_environment_validate(
             w->mappings[i].executable!=(i==0)) return PWL_ERR_INVALID_ARGUMENT;
         if (i && s->physical_address<spans[i-1]->physical_address+spans[i-1]->size)
             return PWL_ERR_INVALID_ARGUMENT;
+    }
+    /* Resident callbacks and the relocated application share one owner/root.
+     * The image ranges must cover its full extent without gaps or W+X pages;
+     * its entry must belong to executable, read-only memory. */
+    if (w->boot.size) {
+        const pwl_pe_loaded_t *boot=&w->boot_image;
+        if (!span_owned(w,&w->boot) || w->boot.size%PWL_PAGE_SIZE ||
+            w->boot.physical_address%PWL_PAGE_SIZE ||
+            w->boot.physical_address<w->heap.physical_address+w->heap.size ||
+            boot->physical_address!=w->boot.physical_address ||
+            boot->image_size!=w->boot.size || !boot->range_count)
+            return PWL_ERR_INVALID_ARGUMENT;
+        uint64_t covered=0;
+        int executable_entry=0;
+        for (size_t i=0;i<boot->range_count;i++) {
+            const pwl_x64_identity_range_t *range=&boot->ranges[i];
+            const pwl_x64_identity_range_t *mapping=&w->mappings[6+i];
+            if (range->base!=boot->physical_address+covered || !range->size ||
+                range->size%PWL_PAGE_SIZE || range->size>boot->image_size-covered ||
+                range->writable>1 || range->executable>1 ||
+                (range->writable && range->executable) ||
+                mapping->base!=range->base || mapping->size!=range->size ||
+                mapping->writable!=range->writable || mapping->executable!=range->executable)
+                return PWL_ERR_INVALID_ARGUMENT;
+            if (boot->entry_address>=range->base &&
+                boot->entry_address-range->base<range->size && range->executable)
+                executable_entry=1;
+            covered+=range->size;
+        }
+        if (covered!=boot->image_size || !executable_entry)
+            return PWL_ERR_INVALID_ARGUMENT;
+        const pwl_phys_region_t *region=&w->regions[8];
+        if (region->base!=w->boot.physical_address || region->length!=w->boot.size ||
+            region->kind!=PWL_MEMORY_LOADER_CODE)
+            return PWL_ERR_INVALID_ARGUMENT;
+    } else if (w->boot.prepare_address || w->boot.physical_address ||
+               w->boot_image.physical_address || w->boot_image.image_size ||
+               w->boot_image.entry_address || w->boot_image.range_count) {
+        return PWL_ERR_INVALID_ARGUMENT;
     }
     if (image->size>w->firmware.size || sizeof(pwl_native_data_t)>w->data.size ||
         w->table_count>w->tables_span.size/PWL_PAGE_SIZE ||
