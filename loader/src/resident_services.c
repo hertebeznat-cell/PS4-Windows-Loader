@@ -84,3 +84,128 @@ void EFI pwl_resident_set_mem(void *to,size_t size,unsigned char value)
     unsigned char *d=to;
     for (size_t i=0;i<size;i++) d[i]=value;
 }
+
+/* Serialized protocol registry. Handles are opaque values, never dereferenced.
+ * Driver ownership/open tracking and notification events are not implemented;
+ * no OpenProtocol entry is published by this registry. */
+static int guid_equal(const pwl_efi_guid_t *a,const pwl_efi_guid_t *b)
+{
+    for (size_t i=0;i<16;i++) if (a->bytes[i]!=b->bytes[i]) return 0;
+    return 1;
+}
+static int handle_known(const pwl_resident_data_t *d,uint64_t handle)
+{
+    if (!handle) return 0;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++)
+        if (d->protocols[i].handle==handle) return 1;
+    return 0;
+}
+static pwl_resident_protocol_t *find_protocol(pwl_resident_data_t *d,
+    uint64_t handle,const pwl_efi_guid_t *guid)
+{
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++)
+        if (d->protocols[i].handle==handle && guid_equal(&d->protocols[i].guid,guid))
+            return &d->protocols[i];
+    return NULL;
+}
+uint64_t EFI pwl_resident_install_protocol(uint64_t *handle,const pwl_efi_guid_t *guid,
+    unsigned type,void *interface)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !handle || !guid || type) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    if (*handle && (!handle_known(d,*handle) || find_protocol(d,*handle,guid)))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (!*handle && d->protocol_next_handle==UINT64_MAX)
+        return PWL_EFI_OUT_OF_RESOURCES;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) {
+        pwl_resident_protocol_t *entry=&d->protocols[i];
+        if (entry->handle) continue;
+        /* Snapshot GUID before assigning in case it aliases this entry. */
+        pwl_efi_guid_t copy=*guid;
+        uint64_t value=*handle;
+        if (!value) value=++d->protocol_next_handle;
+        *entry=(pwl_resident_protocol_t){value,(uint64_t)(uintptr_t)interface,copy};
+        *handle=value;
+        return PWL_EFI_SUCCESS;
+    }
+    return PWL_EFI_OUT_OF_RESOURCES;
+}
+uint64_t EFI pwl_resident_reinstall_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
+    void *old_interface,void *new_interface)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !handle_known(d,handle)) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry || entry->interface_address!=(uint64_t)(uintptr_t)old_interface)
+        return PWL_EFI_NOT_FOUND;
+    entry->interface_address=(uint64_t)(uintptr_t)new_interface;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_uninstall_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
+    void *interface)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !handle_known(d,handle)) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry || entry->interface_address!=(uint64_t)(uintptr_t)interface)
+        return PWL_EFI_NOT_FOUND;
+    *entry=(pwl_resident_protocol_t){0};
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_handle_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
+    void **interface)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !interface || !handle_known(d,handle))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry) return PWL_EFI_UNSUPPORTED;
+    *interface=(void *)(uintptr_t)entry->interface_address;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_locate_protocol(const pwl_efi_guid_t *guid,void *registration,
+    void **interface)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !interface) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    if (registration) return PWL_EFI_UNSUPPORTED;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) {
+        pwl_resident_protocol_t *entry=&d->protocols[i];
+        if (entry->handle && guid_equal(&entry->guid,guid)) {
+            *interface=(void *)(uintptr_t)entry->interface_address;
+            return PWL_EFI_SUCCESS;
+        }
+    }
+    return PWL_EFI_NOT_FOUND;
+}
+uint64_t EFI pwl_resident_locate_handle(unsigned search,const pwl_efi_guid_t *guid,
+    void *key,size_t *size,uint64_t *buffer)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || search>2 || (search==2 && !guid) || (search==1 && !key))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    if (search==1) return PWL_EFI_UNSUPPORTED;
+    uint64_t matches[PWL_RESIDENT_PROTOCOLS];
+    size_t count=0;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) {
+        pwl_resident_protocol_t *entry=&d->protocols[i];
+        if (!entry->handle || (search==2 && !guid_equal(&entry->guid,guid))) continue;
+        size_t j;
+        for (j=0;j<count;j++) if (matches[j]==entry->handle) break;
+        if (j==count) matches[count++]=entry->handle;
+    }
+    if (!count) return PWL_EFI_NOT_FOUND;
+    if (!size) return PWL_EFI_INVALID_PARAMETER;
+    size_t needed=count*sizeof(*buffer);
+    if (*size<needed) { *size=needed;return PWL_EFI_BUFFER_TOO_SMALL; }
+    if (!buffer) return PWL_EFI_INVALID_PARAMETER;
+    for (size_t i=0;i<count;i++) buffer[i]=matches[i];
+    *size=needed;
+    return PWL_EFI_SUCCESS;
+}

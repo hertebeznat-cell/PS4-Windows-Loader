@@ -43,6 +43,12 @@ typedef void (EFI *copy_fn)(void *,const void *,size_t);
 typedef void (EFI *set_fn)(void *,size_t,unsigned char);
 typedef uint64_t (EFI *pool_alloc_fn)(unsigned,size_t,void **);
 typedef uint64_t (EFI *pool_free_fn)(void *);
+typedef uint64_t (EFI *install_fn)(uint64_t *,const pwl_efi_guid_t *,unsigned,void *);
+typedef uint64_t (EFI *replace_fn)(uint64_t,const pwl_efi_guid_t *,void *,void *);
+typedef uint64_t (EFI *remove_fn)(uint64_t,const pwl_efi_guid_t *,void *);
+typedef uint64_t (EFI *handle_fn)(uint64_t,const pwl_efi_guid_t *,void **);
+typedef uint64_t (EFI *locate_fn)(const pwl_efi_guid_t *,void *,void **);
+typedef uint64_t (EFI *handles_fn)(unsigned,const pwl_efi_guid_t *,void *,size_t *,uint64_t *);
 /* POSIX executable mappings permit conversion through memcpy without a C
  * object-pointer/function-pointer cast. Each callback uses the actual ms ABI.
  */
@@ -51,9 +57,58 @@ typedef uint64_t (EFI *pool_free_fn)(void *);
     _Static_assert(sizeof(name)==sizeof(entry),"AMD64 pointers"); \
     memcpy(&name,&entry,sizeof(name)); } while(0)
 
+static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
+{
+    LOAD(install_fn,install,11);LOAD(replace_fn,replace,12);LOAD(remove_fn,remove,13);
+    LOAD(handle_fn,handle,14);LOAD(handles_fn,handles,15);LOAD(locate_fn,locate,16);
+    pwl_efi_guid_t a={{1}},b={{2}},unknown={{3}};
+    uint64_t first=0,second=0,list[64];void *interface=NULL;
+    int one=1,two=2;
+    assert(install(&first,&a,0,&one)==0 && first);
+    assert(install(&first,&a,0,&two)==PWL_EFI_INVALID_PARAMETER);
+    assert(install(&first,&b,0,&two)==0);
+    assert(install(&second,&a,0,&two)==0 && second!=first);
+    assert(handle(first,&a,&interface)==0 && interface==&one);
+    assert(handle(first,&unknown,&interface)==PWL_EFI_UNSUPPORTED && interface==&one);
+    assert(handle(UINT64_MAX,&a,&interface)==PWL_EFI_INVALID_PARAMETER);
+    assert(locate(&a,NULL,&interface)==0 && interface==&one);
+    size_t size=0;
+    assert(handles(0,NULL,NULL,&size,NULL)==PWL_EFI_BUFFER_TOO_SMALL && size==16);
+    assert(handles(0,NULL,NULL,&size,list)==0 && list[0]==first && list[1]==second);
+    assert(handles(2,&a,NULL,&size,list)==0 && size==16);
+    assert(handles(2,&unknown,NULL,&size,list)==PWL_EFI_NOT_FOUND);
+    assert(handles(1,NULL,NULL,&size,list)==PWL_EFI_INVALID_PARAMETER);
+    assert(handles(1,NULL,&one,&size,list)==PWL_EFI_UNSUPPORTED);
+    assert(replace(first,&a,&two,&one)==PWL_EFI_NOT_FOUND);
+    assert(replace(first,&a,&one,&two)==0);
+    assert(handle(first,&a,&interface)==0 && interface==&two);
+    assert(remove(first,&a,&one)==PWL_EFI_NOT_FOUND);
+    assert(remove(first,&a,&two)==0);
+    uint64_t third=0;
+    assert(install(&third,&unknown,0,NULL)==0 && third!=first && third!=second);
+    assert(handle(third,&unknown,&interface)==0 && !interface);
+    assert(remove(first,&b,&two)==0 && remove(second,&a,&two)==0);
+    assert(remove(third,&unknown,NULL)==0);
+    uint64_t all[PWL_RESIDENT_PROTOCOLS];
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) {
+        all[i]=0;assert(install(&all[i],&a,0,&one)==0);
+    }
+    uint64_t overflow=0;
+    assert(install(&overflow,&a,0,&one)==PWL_EFI_OUT_OF_RESOURCES && !overflow);
+    d->memory.exited=1;
+    assert(handle(all[0],&a,&interface)==PWL_EFI_ACCESS_DENIED);
+    assert(remove(all[0],&a,&one)==PWL_EFI_ACCESS_DENIED);
+    d->memory.exited=0;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) assert(remove(all[i],&a,&one)==0);
+    d->protocol_next_handle=UINT64_MAX;
+    assert(install(&overflow,&a,0,&one)==PWL_EFI_OUT_OF_RESOURCES && !overflow);
+    assert(locate(&a,NULL,&interface)==PWL_EFI_NOT_FOUND);
+}
+
 static void run_copy(void)
 {
-    unsigned char *code=mmap(NULL,4096,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    size_t code_bytes=(sizeof(resident_bytes)+4095U)&~(size_t)4095U;
+    unsigned char *code=mmap(NULL,code_bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     assert(code!=MAP_FAILED && (uintptr_t)code>UINT32_MAX);
     pwl_resident_data_t d={0};
     pwl_phys_region_t region={UINT64_C(0x27a400000),65536,PWL_MEMORY_FREE};
@@ -62,7 +117,7 @@ static void run_copy(void)
     d.tpl=4;
     memcpy(code,resident_bytes,sizeof(resident_bytes));
     memcpy(code+resident_image.binding_offset,&context,sizeof(context));
-    assert(mprotect(code,4096,PROT_READ|PROT_EXEC)==0);
+    assert(mprotect(code,code_bytes,PROT_READ|PROT_EXEC)==0);
     LOAD(raise_fn,raise_tpl,0); LOAD(restore_fn,restore_tpl,1);
     LOAD(alloc_fn,allocate,2); LOAD(free_fn,release,3); LOAD(map_fn,map,4);
     LOAD(exit_fn,exit_boot,5); LOAD(crc_fn,crc,6); LOAD(copy_fn,copy,7); LOAD(set_fn,set,8);
@@ -91,6 +146,7 @@ static void run_copy(void)
     assert(pool_free(pool)==0 && pool_free(pool)==PWL_EFI_INVALID_PARAMETER);
     assert(pool_alloc(2,0,&pool)==0 && pool_free(pool)==0);
     assert(pool_alloc(2,1,NULL)==PWL_EFI_INVALID_PARAMETER);
+    run_protocols(code,&d);
     uint32_t result=0;
     assert(crc("123456789",9,&result)==0 && result==UINT32_C(0xcbf43926));
     assert(crc(NULL,9,&result)==PWL_EFI_INVALID_PARAMETER);
@@ -125,7 +181,7 @@ static void run_copy(void)
     assert(restored.before==restored.after && restored.entered==stack_test.high);
     assert(munmap(stack,stack_bytes+2*guard)==0);
 #endif
-    assert(munmap(code,4096)==0);
+    assert(munmap(code,code_bytes)==0);
 }
 int main(void)
 {

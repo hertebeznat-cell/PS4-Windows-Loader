@@ -1,4 +1,6 @@
 #include "pwl_native_workspace.h"
+static const pwl_efi_guid_t loaded_guid={{0xa1,0x31,0x1b,0x5b,0x62,0x95,0xd2,0x11,
+                                        0x8e,0x3f,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 
 pwl_status_t pwl_resident_image_validate(const pwl_resident_image_t *b)
 {
@@ -34,6 +36,20 @@ pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *a
         unsigned char *binding=(unsigned char *)w->firmware.prepare_address+blob->binding_offset;
         for (unsigned i=0;i<8;i++) binding[i]=(unsigned char)(w->data.physical_address>>(8*i));
         d->tpl=4;
+        if (w->boot.size) {
+            d->loaded_image=(pwl_efi_loaded_image_t){0};
+            d->loaded_image.revision=0x1000;
+            d->loaded_image.system_table=w->data.physical_address+
+                offsetof(pwl_native_data_t,efi)+offsetof(pwl_efi_prepared_tables_t,system);
+            d->loaded_image.image_base=w->boot.physical_address;
+            d->loaded_image.image_size=w->boot.size;
+            d->loaded_image.image_code_type=1;
+            d->loaded_image.image_data_type=2;
+            /* Memory-buffer image: no invented device or filesystem path. */
+            d->protocols[0]=(pwl_resident_protocol_t){r->image_handle,
+                w->data.physical_address+offsetof(pwl_native_data_t,loaded_image),loaded_guid};
+            d->protocol_next_handle=r->image_handle;
+        }
         status=pwl_native_resident_environment_validate(w,blob);
         if (status==PWL_OK) return PWL_OK;
     }
@@ -133,6 +149,24 @@ pwl_status_t pwl_native_resident_environment_validate(
         if (actual[i]!=expected) return PWL_ERR_INVALID_ARGUMENT;
     }
     const pwl_native_data_t *data=w->data.prepare_address;
+    if (w->boot.size) {
+        pwl_efi_loaded_image_t expected={0};
+        expected.revision=0x1000;
+        expected.system_table=w->data.physical_address+offsetof(pwl_native_data_t,efi);
+        expected.image_base=w->boot.physical_address;
+        expected.image_size=w->boot.size;
+        expected.image_code_type=1;expected.image_data_type=2;
+        const unsigned char *actual=(const unsigned char *)&data->loaded_image;
+        const unsigned char *wanted=(const unsigned char *)&expected;
+        for (size_t i=0;i<sizeof(expected);i++)
+            if (actual[i]!=wanted[i]) return PWL_ERR_INVALID_ARGUMENT;
+        const pwl_resident_protocol_t *protocol=&data->protocols[0];
+        if (protocol->handle!=data->memory.image_handle ||
+            protocol->interface_address!=w->data.physical_address+
+                offsetof(pwl_native_data_t,loaded_image)) return PWL_ERR_INVALID_ARGUMENT;
+        for (size_t i=0;i<16;i++)
+            if (protocol->guid.bytes[i]!=loaded_guid.bytes[i]) return PWL_ERR_INVALID_ARGUMENT;
+    }
     pwl_efi_table_spec_t spec={w->firmware.physical_address,image->size,
         w->data.physical_address+offsetof(pwl_native_data_t,efi),sizeof(data->efi),{0}};
     for (size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=image->callbacks[i];

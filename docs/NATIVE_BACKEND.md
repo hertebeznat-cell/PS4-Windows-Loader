@@ -206,3 +206,39 @@ coalescing, foreign/double-free and retired-map behavior.
 Reference: [UEFI Boot Services, memory allocation](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html).
 This adds callable memory services, not complete Boot Manager firmware or a
 console entry path.
+
+
+## Resident protocol registry and initial image metadata
+
+The resident image publishes InstallProtocolInterface, ReinstallProtocolInterface,
+UninstallProtocolInterface, HandleProtocol, LocateHandle and LocateProtocol.
+The database holds 64 GUID/interface pairs with monotonically assigned opaque
+handles. Empty-interface marker protocols are accepted. GUIDs are copied into
+owned data; externally supplied handles are compared without dereferencing.
+Duplicates, unknown handles, incorrect old interfaces and exhausted storage
+are rejected without partially changing the registry. LocateHandle deduplicates
+handles and supports AllHandles/ByProtocol with buffer-size negotiation.
+
+Registration-based notification search is explicitly unsupported; notification
+events and driver OpenProtocol ownership tracking are not implemented or
+published. Calls must be serialized. The registry retires with the memory
+manager; no claim of a complete ExitBootServices implementation is made.
+
+Combined native preparation installs an AMD64 LoadedImage record for the
+relocated application on the requested image handle. Its SystemTable, ImageBase,
+ImageSize and protocol interface are destination physical addresses, not
+preparation pointers. The input is treated as a memory-buffer image: DeviceHandle
+and FilePath remain zero until an actual resident filesystem/device path is
+provided. No synthetic storage identity is invented. The environment audit
+checks the metadata and the initial protocol record before publication.
+
+Copied-code host checks cover all six new Microsoft ABI callbacks, duplicate
+GUIDs, shared handles, enumeration, replacement, removal, full capacity and
+handle-number exhaustion. Native workspace tests cover LoadedImage binding and
+metadata corruption above 4 GiB. These are automated checks, not new console
+runs. The image now exports 17 callbacks; the historical nine-call diagnostic
+still checks its original subset.
+
+Boot Manager entry remains blocked on resident file/device protocols, the
+complete platform memory inventory and a CPU/device handoff with mapped
+exception dependencies. The new registry does not remove those requirements.

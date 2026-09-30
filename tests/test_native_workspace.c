@@ -322,6 +322,14 @@ static void test_resident_boot_image(void)
     unsigned frees=kernel.frees;
     assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_OK);
     assert(w.region_count==9 && w.mapping_count==6+w.boot_image.range_count);
+    pwl_native_data_t *data=w.data.prepare_address;
+    assert(data->loaded_image.image_base==w.boot.physical_address);
+    assert(data->loaded_image.image_size==w.boot.size && data->protocols[0].handle==r.image_handle);
+    assert(data->protocols[0].interface_address==w.data.physical_address+
+           offsetof(pwl_native_data_t,loaded_image));
+    data->loaded_image.image_base++;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->loaded_image.image_base--;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
     assert(pe_get64((unsigned char *)w.boot.prepare_address+0x2000)==
            w.boot.physical_address+0x1010);

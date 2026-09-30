@@ -6,7 +6,7 @@
  * pointers. This is an incomplete preparation fixture, not callable firmware.
  */
 #define PWL_EFI_BOOT_SLOTS 44U
-#define PWL_EFI_PREPARED_CALLBACKS 11U
+#define PWL_EFI_PREPARED_CALLBACKS 17U
 typedef struct pwl_efi_header {
     uint64_t signature;
     uint32_t revision, header_size, crc32, reserved;
@@ -31,7 +31,8 @@ typedef struct pwl_efi_prepared_tables {
 } pwl_efi_prepared_tables_t;
 /* Offsets in order: RaiseTPL, RestoreTPL, AllocatePages, FreePages,
  * GetMemoryMap, ExitBootServices, CalculateCrc32, CopyMem, SetMem,
- * AllocatePool, FreePool.
+ * AllocatePool, FreePool, InstallProtocolInterface, ReinstallProtocolInterface,
+ * UninstallProtocolInterface, HandleProtocol, LocateHandle, LocateProtocol.
  * Caller must independently establish code provenance, relocations and ABI.
  */
 typedef struct pwl_efi_table_spec {

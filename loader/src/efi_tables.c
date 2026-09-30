@@ -7,7 +7,8 @@ _Static_assert(sizeof(pwl_efi_boot_table_t) == 376, "AMD64 Boot Services ABI");
 _Static_assert(offsetof(pwl_efi_system_table_t, boot_services) == 96, "Boot Services offset");
 _Static_assert(offsetof(pwl_efi_boot_table_t, functions) == 24, "Boot Services slots");
 
-static const unsigned slots[PWL_EFI_PREPARED_CALLBACKS] = {0,1,2,3,4,26,40,41,42,5,6};
+static const unsigned slots[PWL_EFI_PREPARED_CALLBACKS] =
+    {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37};
 
 uint32_t pwl_efi_crc32(const void *bytes, size_t size)
 {
