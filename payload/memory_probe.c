@@ -100,7 +100,12 @@ static int probe(struct thread *td,void *args) {
   free_fn release=(free_fn)(base+0x466460);
   extract_fn extract=(extract_fn)(base+0x573d0);
 #ifdef PWL_ROOT_CLONE_PROBE
-  int clone_rc=pwl_root_clone_experiment(map,pmap,allocate,release,extract,&root_result);
+  if(!match(base+0x57410,sig_direct_map,sizeof(sig_direct_map))) {
+    result.error=32;return 0;
+  }
+  uint32_t dm_pml4=*(volatile uint32_t *)(base+0x1b2c394);
+  uint32_t dm_pdpt=*(volatile uint32_t *)(base+0x1b2c398);
+  int clone_rc=pwl_root_clone_experiment(map,pmap,dm_pml4,dm_pdpt,allocate,release,extract,&root_result);
   result.kva=root_result.kva;result.pa=root_result.pa;
   result.stage=root_result.stage;result.error=clone_rc?root_result.error+20:0;
   return 0;
@@ -163,6 +168,9 @@ static __attribute__((noinline)) int run_test(void) {
   printf_notification(PWL_PROBE_LABEL ": active root=%llx source=%llx source PA=%llx",
     (unsigned long long)root_result.cr3,(unsigned long long)root_result.source,
     (unsigned long long)root_result.source_pa);
+  printf_notification(PWL_PROBE_LABEL ": kernel root=%llx PA=%llx direct=%llx indices=%u/%u",
+    (unsigned long long)root_result.kernel_source,(unsigned long long)root_result.kernel_source_pa,
+    (unsigned long long)root_result.direct_base,root_result.direct_pml4,root_result.direct_pdpt);
   printf_notification(PWL_PROBE_LABEL ": CR0=%llx CR4=%llx EFER=%llx",
     (unsigned long long)root_result.cr0,(unsigned long long)root_result.cr4,
     (unsigned long long)root_result.efer);
@@ -202,14 +210,16 @@ static __attribute__((noinline)) int run_test(void) {
 #ifdef PWL_ROOT_CLONE_PROBE
   if(n>0 && (size_t)n<sizeof(log)) {
     int extra=snprintf(log+n,sizeof(log)-(size_t)n,
-      "transition status=%d error=%u switched=%u restored=%u released=%u cr0=%llx cr3=%llx cr4=%llx efer=%llx source=%llx source_pa=%llx root_before=%llx root_entered=%llx root_after=%llx stack_before=%llx stack_entered=%llx stack_after=%llx mode=IDENTICAL_ROOT_CLONE windows_called=0\n",
+      "transition status=%d error=%u switched=%u restored=%u released=%u cr0=%llx cr3=%llx cr4=%llx efer=%llx source=%llx source_pa=%llx root_before=%llx root_entered=%llx root_after=%llx stack_before=%llx stack_entered=%llx stack_after=%llx kernel_source=%llx kernel_pa=%llx direct=%llx indices=%u/%u mode=IDENTICAL_ROOT_CLONE windows_called=0\n",
       root_result.transition_status,root_result.error,root_result.switched,root_result.restored,root_result.released,
       (unsigned long long)root_result.cr0,(unsigned long long)root_result.cr3,
       (unsigned long long)root_result.cr4,(unsigned long long)root_result.efer,
       (unsigned long long)root_result.source,(unsigned long long)root_result.source_pa,
       (unsigned long long)root_result.root_before,(unsigned long long)root_result.root_entered,
       (unsigned long long)root_result.root_after,(unsigned long long)root_result.stack_before,
-      (unsigned long long)root_result.stack_entered,(unsigned long long)root_result.stack_after);
+      (unsigned long long)root_result.stack_entered,(unsigned long long)root_result.stack_after,
+      (unsigned long long)root_result.kernel_source,(unsigned long long)root_result.kernel_source_pa,
+      (unsigned long long)root_result.direct_base,root_result.direct_pml4,root_result.direct_pdpt);
     if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
   }
 #endif

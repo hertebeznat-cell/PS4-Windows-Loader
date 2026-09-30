@@ -13,6 +13,7 @@ on:
       - 'tools/build_workspace_probe.sh'
       - 'tools/test_native_core.sh'
       - 'tests/test_root_clone.c'
+      - 'tests/test_root_source.c'
       - 'docs/ROOT_CLONE.md'
       - '.github/workflows/root-clone.yml'
   workflow_dispatch:

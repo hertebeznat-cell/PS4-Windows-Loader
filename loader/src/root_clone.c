@@ -1,4 +1,15 @@
 #include "pwl_root_clone.h"
+pwl_status_t pwl_x64_root_direct_address(uint32_t pml4_index,uint32_t pdpt_index,
+    uint64_t physical,uint64_t *address)
+{
+    if (address) *address=0;
+    if (!address || pml4_index<256 || pml4_index>511 || pdpt_index>480 ||
+        !physical || physical%4096 || physical>=(UINT64_C(32)<<30))
+        return PWL_ERR_INVALID_ARGUMENT;
+    *address=(UINT64_C(0xffff800000000000) |
+        ((uint64_t)pml4_index<<39) | ((uint64_t)pdpt_index<<30))+physical;
+    return PWL_OK;
+}
 pwl_status_t pwl_x64_root_clone_prepare(const pwl_x64_cpu_state_t *cpu,
     const volatile uint64_t *source,uint64_t *destination)
 {

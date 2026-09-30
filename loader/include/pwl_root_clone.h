@@ -2,6 +2,9 @@
 #define PWL_ROOT_CLONE_H
 #include "pwl_handoff.h"
 #include "pwl_address_call.h"
+/* Same-build direct map covers 32 GiB from the supplied PDPT slot. */
+pwl_status_t pwl_x64_root_direct_address(uint32_t pml4_index,uint32_t pdpt_index,
+    uint64_t physical,uint64_t *address);
 pwl_status_t pwl_x64_root_clone_prepare(const pwl_x64_cpu_state_t *cpu,
     const volatile uint64_t *source,uint64_t *destination);
 /* Identical-mapping experiment only. Same six report offsets as address_call;

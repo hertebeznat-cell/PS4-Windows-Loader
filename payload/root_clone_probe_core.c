@@ -1,8 +1,10 @@
 #include "pwl_root_clone.h"
 #include "root_clone_report.h"
+#include "root_clone_source.h"
 /* Same-target returning diagnostic; never enables the production binding. */
 static int canonical(uint64_t p) {return p>=UINT64_C(0xffff800000000000);}
-int pwl_root_clone_experiment(void *map,void *pmap,pwl_workspace_alloc_fn allocate,
+int pwl_root_clone_experiment(void *map,void *pmap,uint32_t dm_pml4,uint32_t dm_pdpt,
+ pwl_workspace_alloc_fn allocate,
  pwl_workspace_free_fn release,pwl_workspace_extract_fn extract,
  volatile pwl_root_clone_report_t *r)
 {
@@ -17,13 +19,18 @@ int pwl_root_clone_experiment(void *map,void *pmap,pwl_workspace_alloc_fn alloca
  cpu.efer=((uint64_t)hi<<32)|lo;
  r->cr0=cpu.cr0;r->cr3=cpu.cr3;r->cr4=cpu.cr4;r->efer=cpu.efer;
  if (pwl_x64_cpu_state_validate(&cpu,cpu.cr3)!=PWL_OK) {r->error=1;return -1;}
- /* Existing same-build pmap candidate. Translation must match live CR3;
-  * it is never treated as a verified root merely from the field offset. */
- uint64_t source=*(volatile uint64_t *)((unsigned char *)pmap+0x20);
- r->source=source;
- if (!canonical(source) || source%4096 || source>UINT64_MAX-4096) {r->error=2;return -1;}
- uint64_t source_pa=extract(pmap,source);r->source_pa=source_pa;
- if (source_pa!=cpu.cr3 || extract(pmap,source+4095)!=cpu.cr3+4095) {r->error=3;return -1;}
+ /* The kernel pmap's root need not be the current process root. Confirm
+  * its direct-map alias first, then translate the live root's alias before
+  * dereferencing it. No subtraction-derived base or alternate field scan. */
+ uint64_t kernel_source=*(volatile uint64_t *)((unsigned char *)pmap+0x20);
+ r->kernel_source=kernel_source;
+ r->direct_pml4=dm_pml4;r->direct_pdpt=dm_pdpt;
+ if (!canonical(kernel_source) || kernel_source%4096 || kernel_source>UINT64_MAX-4096) {
+  r->error=2;return -1;
+ }
+ int source_error=pwl_root_clone_source(pmap,extract,cpu.cr3,dm_pml4,dm_pdpt,kernel_source,r);
+ if (source_error) {r->error=(unsigned)source_error;return -1;}
+ uint64_t source=r->source;
  uint64_t kva=allocate(map,32768,0x101,0x100000,UINT64_C(1)<<47,16384,0,6);
  r->kva=kva;
  if (!kva) {r->error=4;return -1;}
