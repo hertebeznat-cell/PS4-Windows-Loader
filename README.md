@@ -251,16 +251,19 @@ and does not need repeating. Allocator confirmation and Windows boot remain
 unresolved; see its hardware-results section for the exact evidence still needed.
 
 
-The next [returning root-clone diagnostic](docs/ROOT_CLONE.md) combines current
-CPU/root checks, physical translation, a complete identical root copy, a
-bounded CR3/stack switch and restoration in one console invocation and one
-`PS4WL_TRANSITION.LOG`. It refuses a root candidate that does not match live
-CR3. The new variant has not yet run on PS4. It retains the host mappings and
-does not activate the independent EFI root or enter Windows Boot Manager.
+The [returning root-clone diagnostic](docs/ROOT_CLONE.md#successful-photographed-console-result--2026-09-30)
+passed on PS4: `rc=0 stage=5 error=0`, `status=0 switched=1 restored=1 released=1`.
+Photographs confirm active root `0x0CF0A000`, clone root `0x558D8000`, restoration
+of the original root and stack, and return from release. It uses the live direct
+map (indices 436/348), so the kernel root may differ from the active process
+root. No emulator was used; USB logging is optional. Do not repeat this check.
+The next milestone is resident EFI callback execution with a verified return
+under identical mappings. Independent EFI mappings and Windows Boot Manager
+entry remain untested.
 
 
 The [USB-only readback check](docs/USB_LOG_CHECK.md) investigates the reported
 absence of `PS4WL_TRANSITION.LOG` despite successful write notifications. It
 checks filesystem device boundaries and reopens/compares a short `PWL.LOG`
-record. It does not repeat the refused CPU transition or allocate kernel memory.
+record. It does not execute a CPU transition or allocate kernel memory.
 The physical USB persistence issue remains unresolved until the file is retrieved.

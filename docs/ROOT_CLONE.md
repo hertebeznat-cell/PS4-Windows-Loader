@@ -33,10 +33,10 @@ callback, SDK call or allocator runs under the cloned root. Code and exception
 mappings are retained from the source root; this is not the separate resident
 address environment needed by Windows Boot Manager.
 
-The copy and input gates are tested on the development computer. The assembly
-is compiled and inspected, but no emulator is used and it has not executed on
-PS4. A passing build is not hardware execution evidence. The console test may
-crash. Do not repeat a hung run.
+The copy and input gates are tested on the development computer. The returning
+assembly path also passed on PS4 in the photographed result below; no emulator
+is used. This evidence covers the identical-map experiment only. Further
+variants remain untested until separately observed. Do not repeat a hung run.
 
 ## Single console invocation
 
@@ -95,6 +95,37 @@ active CPU root, not that active CR3 was invalid. This revision resolves the
 active root through the verified direct map and keeps the exact-translation
 refusal. Host regression checks cover distinct kernel/process roots, physical
 addresses above 4 GiB, invalid indices/ranges, and missing first/last-byte
-translations. This revised resolution and root transition still require a
-console result; compilation is not that evidence. Error 31 now denotes a
+translations. The photographed console result below confirms the revised
+resolution and bounded root transition. Error 31 denotes a
 direct-map identity/range refusal; error 32 denotes changed extractor bytes.
+
+## Successful photographed console result — 2026-09-30
+
+The supplied notification photographs show:
+
+- `rc=0 stage=5 error=0`.
+- `critical=0 locks=0 flags=246` (hexadecimal flags).
+- Active root and selected source PA both `0x0CF0A000`.
+- Kernel root PA `0x0C7B4000`, distinct from the active root.
+- Direct-map base `0xFFFFDA5700000000`, indices `436/348`.
+- `CR0=0x8005003B CR4=0x406F0 EFER=0xD01`.
+- Clone allocation PA `0x558D8000`.
+- `status=0 switched=1 restored=1 released=1`.
+- Roots before/entered/after: `0x0CF0A000 / 0x558D8000 / 0x0CF0A000`.
+- The notification's before/after stack addresses match; the entered stack
+  differs and belongs to the temporary allocation.
+
+The distinct live direct-map indices corroborate reading the running values
+rather than reusing the capture's 503/348. These photos confirm a real switch
+to an identical copy of the active root, temporary-stack use, restoration and
+return of the original-owner release call. A build-ID notification is not
+visible in this supplied set; the report is associated with the active-root
+variant's displayed fields rather than an independently photographed commit ID.
+
+Do not repeat this completed check. The USB saved notification does not prove
+that Windows can retrieve the file; the user-visible result is sufficient for
+this milestone. No resident EFI callback ran under the clone and no independent
+EFI mappings were activated. Exception recovery, independent root preparation
+and Windows Boot Manager entry remain separate milestones. The next step is
+resident EFI callback execution under an identical root with owned mapped
+code/data/stack and a verified return path, before independent mappings.
