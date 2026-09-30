@@ -8,9 +8,10 @@ static int pwl_log_readback(const char *path,const char *expected,size_t size,in
  if(fd<0){*error=errno;return -1;}
  int status=0;
  off_t end=lseek(fd,0,2);
- if(end<0 || (uint64_t)end<size || lseek(fd,end-(off_t)size,0)<0) {
-  *error=end<0?errno:0;status=-2;
- } else {
+ if(end<0){*error=errno;status=-2;}
+ else if((uint64_t)end<size){status=-2;}
+ else if(lseek(fd,end-(off_t)size,0)<0){*error=errno;status=-2;}
+ else {
   char block[64];size_t done=0;
   while(done<size) {
    size_t want=size-done;if(want>sizeof(block))want=sizeof(block);
