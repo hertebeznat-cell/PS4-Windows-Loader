@@ -26,10 +26,10 @@ case "$mode" in
   name=PS4WindowsLoader-Root-Clone
   document=docs/ROOT_CLONE.md ;;
  usb-log)
-  out=build/usb-log-check
+  out=build/usb-identity-check
   probe_defs=""
   probe_source=payload/usb_log_check.c
-  name=PS4WindowsLoader-USB-Log-Check
+  name=PS4WindowsLoader-USB-Identity-Check
   document=docs/USB_LOG_CHECK.md ;;
  *) echo 'Unknown preparation mode' >&2; exit 1 ;;
 esac

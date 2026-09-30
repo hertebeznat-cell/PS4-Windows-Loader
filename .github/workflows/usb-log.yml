@@ -5,6 +5,8 @@ on:
     paths:
       - 'payload/usb_log_check.c'
       - 'payload/log_readback.h'
+      - 'payload/usb_identity.h'
+      - 'tests/test_usb_identity.c'
       - 'payload/probe_log.h'
       - 'payload/probe_start.S'
       - 'tools/build_workspace_probe.sh'
@@ -36,5 +38,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: PS4-Windows-Loader-USB-Log-${{ matrix.cc }}
-          path: build/usb-log-check/
+          path: build/usb-identity-check/
           retention-days: 30
