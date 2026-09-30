@@ -11,6 +11,10 @@ mkdir -p build
 sh tools/build_resident.sh
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+    -DPWL_PS4_MEMORY_HOST_TEST \
+    loader/src/main.c loader/src/pe_loader.c loader/src/paging.c \
+    loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
+    loader/src/native_workspace.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
     loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/handoff.c \
     tests/test_resident_services.c -o build/test-resident-services
 ./build/test-resident-services

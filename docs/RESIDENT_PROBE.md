@@ -40,9 +40,13 @@ If neither USB accepts a synced entry, the experiment is not started. Screen
 notifications show the operation stage and errno for both USB paths. Write,
 sync and close failures are returned as logging failures rather than success.
 
-Hardware behavior for this new build is unverified. The larger-memory test
-was reported successful in the prior conversation; this new resident variant
-still needs its own returning result. A hang or crash remains possible.
+Build `64a2f64211849a68a307a23da8d3778ea3d7a019` passed on the PS4:
+`rc=0 stage=5 error=0`, `prep=0 tables_status=0 release=0 copies=1`,
+`efi_status=0 code_called=0`. It allocated 229376 bytes at PA `0x516C0000`,
+prepared four table pages and eight regions, then returned. USB journal version
+2 recorded both pre-entry checkpoints and the final result. Do not repeat this
+completed preparation test. The steps below are retained for reproducibility;
+the next separate experiment is [process callback testing](RESIDENT_CALLS.md).
 
 1. Use the dedicated USB test medium already used for the returning probes.
 2. Send `PS4WindowsLoader-Resident-Probe.bin` once using the existing method.

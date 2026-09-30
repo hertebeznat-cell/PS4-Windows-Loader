@@ -30,16 +30,19 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 | Installed 13.52 kernel capture | ELF/base/version checked; kept private |
 | One 16 KiB allocation | Passed on PS4: physical continuity, zeroing and readback |
 | Original KVA release | `kmem_free` returned; independent reclamation not proven |
-| Resident workspace | Prior synthetic test reported passed; resident EFI preparation pending |
+| Resident workspace and EFI tables | Passed on PS4: 224 KiB, copies, tables and release |
+| Resident callback execution | Host tests passed; new returning process-context test pending |
 | CPU handoff and Windows kernel | Not reached |
 
 The completed [Memory-Probe](docs/MEMORY_PROBE.md) returned
 `rc=0 stage=5 error=0`. Its internal stage 5 is not Windows boot Stage 5.
-The next [Workspace-Probe](docs/WORKSPACE_PROBE.md) checks a larger owned arena,
-resident copies and independent page tables, then frees it and returns.
-It uses synthetic code/media, does not activate CR3 or enter Microsoft code,
-and remains experimental. Production memory binding still refuses calls.
-Do not repeat the completed dumper or one-page test.
+The completed [resident preparation](docs/RESIDENT_PROBE.md) additionally checked
+a larger owned arena, resident code/data copies, EFI tables and independent
+page tables, then freed it and returned. The next
+[resident process call test](docs/RESIDENT_CALLS.md) checks nine actual callback
+entries from copied RX code with synthetic descriptors. Neither activates CR3
+or enters Microsoft code. Production memory binding still refuses calls.
+Do not repeat the completed preparation tests.
 
 ## Where it stands
 
@@ -196,7 +199,10 @@ entries and physical workspace binding. Host tests execute copied RX code above
 4 GiB and check tables, mappings and cleanup. ExitBootServices returns
 EFI_UNSUPPORTED and TPL is only serialized state tracking. The new returning
 console experiment prepares and checks the image but never calls it; hardware
-results are pending. Windows is not launched.
+preparation passed on the PS4 in build `64a2f64`. The separate
+[returning process callback test](docs/RESIDENT_CALLS.md) now checks all nine
+entries from a copied RX image using synthetic memory descriptors. It does not
+execute in the kernel workspace or switch CPU context. Windows is not launched.
 
 1. Replace the user-process execution path with a platform-owned boot context
    capable of executing privileged CPU instructions; review the shutdown before

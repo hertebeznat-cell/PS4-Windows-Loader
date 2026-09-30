@@ -1,0 +1,35 @@
+name: Returning resident process calls
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'loader/**'
+      - 'payload/resident_call_probe.c'
+      - 'payload/probe_log.h'
+      - 'payload/probe_linker.ld'
+      - 'tools/*resident*'
+      - 'tools/test_native_core.sh'
+      - 'tests/test_resident_services.c'
+      - 'docs/RESIDENT_CALLS.md'
+      - '.github/workflows/resident-calls.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test copied code and returning call runner
+        run: sh tools/test_native_core.sh
+      - name: Fetch pinned SDK
+        run: |
+          git clone https://github.com/Scene-Collective/ps4-payload-sdk.git calls-sdk
+          git -C calls-sdk checkout b7326416c23ce14639e9180a24093bdc5eedb579
+      - name: Build process call test
+        run: sh tools/build_resident_calls.sh calls-sdk "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Resident-Calls-Experimental
+          path: build/resident-calls/
+          retention-days: 30

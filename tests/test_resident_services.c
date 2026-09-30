@@ -1,10 +1,16 @@
 #define _GNU_SOURCE
 #include "resident_fixture.h"
+#include "pwl_resident_selftest.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 static pwl_resident_image_t resident_image;
+static unsigned checkpoint_count,stop_at;
+static int checkpoint(unsigned call,void *context) {
+    assert(context==(void *)1);checkpoint_count++;
+    return call==stop_at;
+}
 
 #define EFI __attribute__((ms_abi))
 typedef uint64_t (EFI *raise_fn)(uint64_t);
@@ -64,6 +70,17 @@ static void run_copy(void)
     assert(memcmp(bytes,expected,sizeof(bytes))==0);
     set(bytes,sizeof(bytes),0xa5);
     for(size_t i=0;i<sizeof(bytes);i++)assert((unsigned char)bytes[i]==0xa5);
+    pwl_resident_call_report_t report={0};
+    assert(pwl_resident_calls_test(&resident_image,code,&d,&report,checkpoint,(void *)1)==PWL_OK);
+    assert(report.passed_mask==0x1ff && report.last_call==9 && checkpoint_count==9);
+    assert(report.exit_status==PWL_EFI_UNSUPPORTED);
+    stop_at=7;checkpoint_count=0;
+    assert(pwl_resident_calls_test(&resident_image,code,&d,&report,checkpoint,(void *)1)==PWL_ERR_IO);
+    assert(report.passed_mask==0x3f && report.last_call==7 && checkpoint_count==7);
+    stop_at=0;checkpoint_count=0;
+    pwl_resident_image_t bad=resident_image;bad.crc32^=1;
+    assert(pwl_resident_calls_test(&bad,code,&d,&report,checkpoint,(void *)1)==PWL_ERR_INVALID_ARGUMENT);
+    assert(checkpoint_count==0);
     assert(munmap(code,4096)==0);
 }
 int main(void)
