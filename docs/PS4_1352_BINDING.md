@@ -2,8 +2,9 @@
 
 Status: **UNVERIFIED / REFUSED**, not a hardware-ready allocator.
 Audit baseline: project `59b0f8a9d20f6b4707e88658fb6fe14fd68d41d3`.
-There is no new console payload. Do not run Native-Core, repeat Context-Probe,
-or disable Stage 4.8 preflight to test this work.
+There is no allocator-ready console payload. The [Anchor-Probe hardware result](ANCHOR_PROBE.md#photographed-hardware-result--2026-09-30) records LSTAR and a successful return,
+without confirming memory symbols. Do not run Native-Core, repeat the completed
+probes, or disable Stage 4.8 preflight to test this work.
 
 ## Sources and confidence
 

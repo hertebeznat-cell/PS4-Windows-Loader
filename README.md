@@ -8,7 +8,7 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 
 ![Build](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml/badge.svg)
 ![Latest source](https://img.shields.io/badge/latest_source-Stage_4.8-6e56cf)
-![Hardware result](https://img.shields.io/badge/hardware_result-bootmgfw.efi_entered-287d55)
+![Hardware result](https://img.shields.io/badge/latest_hardware-anchor_callback_returned-287d55)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
@@ -41,6 +41,7 @@ It does not use Linux, QEMU, or a virtual machine for the Windows boot path.
 | Stage 4.8 aligned 16 KiB backing window | Earlier entry trace mapped it at `0x00100000`; native page size reported as 16 KiB |
 | Current preflight and CPU probe | Both logged identical CPU flags; preflight mapped `bootmgfw.efi` and stopped before entry |
 | Returning CPU context probe | CPL0 callback returned to CPL3; CR0/CR3/CR4/EFER were captured from on-screen notifications and are recorded in `docs/CONTEXT_PROBE.md` |
+| Returning syscall anchor probe | Build `2271636` returned to CPL3; LSTAR `0xFFFFFFFF8433C1C0` and reported kernel build `r228995/release_13.520` were photographed; memory binding remains unverified |
 | Execution after the earlier successful allocation | `SIGBUS` (`si_code=3`) delivered; no subsequent EFI callback or return recorded |
 | Boot Manager loads `winload.efi` / Windows kernel | Not reached |
 
@@ -198,5 +199,6 @@ Microsoft Windows files, Sony firmware, product keys or proprietary drivers.
 The separate [Anchor-Probe](docs/ANCHOR_PROBE.md) diagnostic collects the live
 syscall entry address, callback flags/alignment and available kernel version
 strings through screen notifications, with optional USB logging. It provides
-new observations for the 13.52 binding investigation; allocator confirmation
-and Windows boot remain unresolved. Use its own CI artifact and instructions.
+photographed observations for the 13.52 binding investigation. The test completed
+and does not need repeating. Allocator confirmation and Windows boot remain
+unresolved; see its hardware-results section for the exact evidence still needed.
