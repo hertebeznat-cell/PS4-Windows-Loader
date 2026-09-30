@@ -32,6 +32,12 @@ case "$mode" in
   probe_defs=""
   name=PS4WindowsLoader-Root-Clone
   document=docs/ROOT_CLONE.md ;;
+ usb-existing)
+  out=build/usb-existing
+  probe_defs=""
+  probe_source=payload/usb_existing_check.c
+  name=PS4WindowsLoader-USB-Existing-File
+  document=docs/USB_EXISTING.md ;;
  usb-log)
   out=build/usb-identity-check
   probe_defs=""
@@ -84,7 +90,7 @@ ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native_memset \
  --redefine-sym memmove=pwl_native_memmove "$out/core.o"
 startup="$sdk/libPS4/crt0.s"
-if [ "$mode" = root-clone ] || [ "$mode" = root-efi ] || [ "$mode" = usb-log ]; then
+if [ "$mode" = root-clone ] || [ "$mode" = root-efi ] || [ "$mode" = usb-log ] || [ "$mode" = usb-existing ]; then
  gcc -c -m64 payload/probe_start.S -o "$out/probe_start.o"
  startup="$out/probe_start.o"
 fi
