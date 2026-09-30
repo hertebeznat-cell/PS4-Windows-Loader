@@ -148,3 +148,43 @@ entry flags/alignment and user-process kernel version strings. Its result is
 not a profile approval: no candidate address is read or called, no kernel base
 is derived, and the handler/VM contract and five symbols remain unverified.
 The previously described allocation/free payload is still not built.
+
+
+## Installed-kernel dump evidence — 2026-09-30
+
+A privately supplied returning-dumper capture has 42,158,832 bytes and SHA-256
+`566b5d65a4d94d2392fa85e6bb573478fb9cbc844a807e5eba18ac3793dc0116`.
+It contains ELF64 little-endian AMD64 metadata and the exact version string
+`r228995/release_branches/release_13.520 Jun 11 2026 05:25:24`.
+Its lowest PT_LOAD VA is `0xFFFFFFFF8433C000`, agreeing with the photographed
+LSTAR minus 0x1C0. Its highest PT_LOAD end minus base equals the capture length.
+This file is a **memory-layout capture**: byte offset equals VA minus base.
+The second PT_LOAD's original ELF file offset is 0xD20000 but its memory offset
+is 0x1520000. Do not use ordinary ELF file-offset mapping for disassembly or data.
+No dump or runtime page-table contents are committed to the repository.
+
+| Candidate | Observed same-build evidence | Assessment |
+| --- | --- | --- |
+| kmem_alloc_contig +0x24D4F0 | Eight-argument wrapper inserts domain zero and calls +0x24D520; body rounds size to 16 KiB, calls physical page allocation +0x2D66A0, references vm_contig.c at +0x7BE00E and compares map with the pointer at +0x22D1D50 | Strong static identification; no allocation executed |
+| kmem_free +0x466460 | Aligns start down and end (KVA+size) up to 16 KiB, tail-jumps to +0x3005B0 | Consistent three-argument VM removal wrapper; no free executed |
+| pmap_extract +0x573D0 | Locks supplied object, loads page-table root from object+0x20, walks present/large-page entries, returns physical address or zero, unlocks; references amd64/pmap.c at +0x783B43 | Strong static identification; lock/context contract remains |
+| kernel_map +0x22D1D50 | Pointer variable loaded/compared by contiguous allocator at +0x24D606/+0x24D61F; 145 candidate RIP-relative references in executable range | Pointer-variable interpretation corroborated |
+| kernel_pmap_store +0x1B2C3A0 | 47 candidate RIP-relative references; initialization at +0x561DB takes object address directly and references nearby page-table globals; object+0x20 holds a canonical root pointer | Object-address interpretation corroborated; full layout not approved |
+
+Reference counts are byte-pattern candidate scans, not independently decoded
+instruction counts. Code windows above were separately disassembled with GNU
+objdump. This evidence increases confidence in the candidates without proving
+all ABI details, live object lifetime, CPU affinity, VM-lock eligibility, or
+allocator cleanup. The production binding gate remains **UNSUPPORTED**.
+
+The syscall-11 entry at base+0x1102B70+11*48 contains argument count 2 and handler
+`0xFFFFFFFF843896D0`, corroborating the GoldHEN resolver result. Its installed
+handler begins with an indirect jump (`FF 26`); treating the original body as
+an unmodified FreeBSD handler would be incorrect. Successful dump callbacks
+show the SDK argument path worked for copying in this run, not that VM
+allocation is permitted under its locks or scheduling context.
+
+Next: trace the installed syscall-11 handler and its indirection, determine
+thread/lock/preemption constraints, then design a returning one-page allocation,
+translation and release diagnostic with independent error reporting. Do not
+switch CR3, stop APs, or enter Microsoft code during that diagnostic.
