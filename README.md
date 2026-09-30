@@ -30,7 +30,7 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 | Installed 13.52 kernel capture | ELF/base/version checked; kept private |
 | One 16 KiB allocation | Passed on PS4: physical continuity, zeroing and readback |
 | Original KVA release | `kmem_free` returned; independent reclamation not proven |
-| Resident workspace | New returning preparation experiment; hardware result pending |
+| Resident workspace | Prior synthetic test reported passed; resident EFI preparation pending |
 | CPU handoff and Windows kernel | Not reached |
 
 The completed [Memory-Probe](docs/MEMORY_PROBE.md) returned
@@ -190,11 +190,13 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iloader/include \
 
 ## Next milestones
 
-The [resident EFI table preparation](docs/EFI_TABLE_PREPARATION.md) module now
-builds and checks AMD64 table layouts, nine supplied callback addresses and
-CRC32s, including destinations above 4 GiB. This is host-tested preparation;
-the resident callback code and workspace integration are still to be built.
-It does not introduce a new console test or a Windows launcher.
+The [resident EFI preparation experiment](docs/RESIDENT_PROBE.md) now includes
+a linked position-independent code image, nine Microsoft x64 ABI callback
+entries and physical workspace binding. Host tests execute copied RX code above
+4 GiB and check tables, mappings and cleanup. ExitBootServices returns
+EFI_UNSUPPORTED and TPL is only serialized state tracking. The new returning
+console experiment prepares and checks the image but never calls it; hardware
+results are pending. Windows is not launched.
 
 1. Replace the user-process execution path with a platform-owned boot context
    capable of executing privileged CPU instructions; review the shutdown before

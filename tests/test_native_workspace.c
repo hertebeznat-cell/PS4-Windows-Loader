@@ -1,5 +1,7 @@
 #include "pwl_native_workspace.h"
 #include "pe_fixture.h"
+#include "resident_fixture.h"
+static pwl_resident_image_t resident_image;
 
 #include <assert.h>
 #include <stdio.h>
@@ -253,11 +255,51 @@ static void test_boot_image(void)
     assert(kernel.allocations == allocations); /* Invalid layout: no allocation. */
 }
 
+static void test_resident(void)
+{
+    pwl_native_workspace_t w={0};
+    pwl_ps4_memory_api_t a=api();
+    unsigned char disk[512]={0};
+    pwl_native_request_t r={NULL,0,disk,sizeof(disk),65536,65536,16,0x1234,NULL,0};
+    kernel.physical=UINT64_C(0x27a300000);
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_OK);
+    pwl_native_data_t *d=w.data.prepare_address;
+    assert(d->tpl==4);
+    assert(d->efi.system.boot_services==w.data.physical_address+
+        offsetof(pwl_native_data_t,efi)+offsetof(pwl_efi_prepared_tables_t,boot));
+    assert(d->efi.boot.functions[26]==w.firmware.physical_address+resident_image.callbacks[5]);
+    assert(pe_get64((unsigned char *)w.firmware.prepare_address+resident_image.binding_offset)==
+        w.data.physical_address);
+    const unsigned char *actual=w.firmware.prepare_address;
+    for(size_t i=0;i<resident_image.size;i++)
+        if(i<resident_image.binding_offset || i>=resident_image.binding_offset+8)
+            assert(actual[i]==resident_bytes[i]);
+    assert(pwl_x64_identity_mappings_validate(w.mappings,w.mapping_count,w.tables,w.table_count)==PWL_OK);
+    assert((*leaf(&w,w.firmware.physical_address)&(UINT64_C(1)<<63|2))==0);
+    assert((*leaf(&w,w.data.physical_address)&(UINT64_C(1)<<63|2))==(UINT64_C(1)<<63|2));
+    assert(pwl_native_workspace_release(&w)==PWL_OK && !kernel.allocation);
+    unsigned allocations=kernel.allocations;
+    pwl_resident_image_t bad=resident_image;
+    bad.crc32^=1;
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&bad,&w)!=PWL_OK);
+    bad=resident_image;bad.binding_offset=UINT64_MAX;
+    assert(pwl_resident_image_validate(&bad)!=PWL_OK);
+    bad=resident_image;bad.callbacks[0]=bad.size;
+    assert(pwl_resident_image_validate(&bad)!=PWL_OK);
+    bad=resident_image;bad.callbacks[0]=bad.binding_offset;
+    assert(pwl_resident_image_validate(&bad)!=PWL_OK);
+    bad=resident_image;bad.callbacks[0]=bad.callbacks[1];
+    assert(pwl_resident_image_validate(&bad)!=PWL_OK);
+    assert(kernel.allocations==allocations);
+}
+
 int main(void)
 {
+    resident_image=resident_fixture();
     test_owner();
     test_pipeline();
     test_boot_image();
+    test_resident();
     puts("native workspace: owned PA/KVA, resident services, guarded mappings and rollback passed");
     return 0;
 }

@@ -29,6 +29,9 @@ int main(void) {
  pwl_workspace_report_t r={0};
  assert(pwl_workspace_experiment((void*)1,(void*)2,allocate,release,extract,&r)==0);
  assert(r.stage==5 && !r.prepare_status && !r.table_status && !r.release_status && r.copy_ok==1);
+#ifdef PWL_RESIDENT_PROBE
+ assert(r.efi_status==0);
+#endif
  assert(r.bytes>=16384 && r.root>=r.pa && r.root<r.pa+r.bytes && r.tables>=4 && r.regions==8);
  assert(allocations==1 && frees==1 && !owner);
  fail_allocation=1;r=(pwl_workspace_report_t){0};

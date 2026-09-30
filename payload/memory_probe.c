@@ -9,7 +9,11 @@ SYSCALL(probe_fsync,95);
 #ifdef PWL_WORKSPACE_PROBE
 #include "workspace_report.h"
 static volatile pwl_workspace_report_t workspace_result;
+#ifdef PWL_RESIDENT_PROBE
+#define PWL_PROBE_LABEL "PS4WL Resident"
+#else
 #define PWL_PROBE_LABEL "PS4WL Workspace"
+#endif
 #else
 #define PWL_PROBE_LABEL "PS4WL Memory"
 #endif
@@ -106,6 +110,9 @@ int _main(struct thread *unused) {
 #ifdef PWL_WORKSPACE_PROBE
   printf_notification(PWL_PROBE_LABEL ": prep=%d tables=%d release=%d",workspace_result.prepare_status,workspace_result.table_status,workspace_result.release_status);
   printf_notification(PWL_PROBE_LABEL ": bytes=%llu tables=%u copies=%u",workspace_result.bytes,workspace_result.tables,workspace_result.copy_ok);
+#ifdef PWL_RESIDENT_PROBE
+  printf_notification(PWL_PROBE_LABEL ": EFI=%d; code not called",workspace_result.efi_status);
+#endif
 #endif
   char log[1024];
   int n=snprintf(log,sizeof(log),"build=%s rc=%d stage=%u error=%u critical=%u locks=%u cs=%x flags=%llx base=%llx kva=%llx pa=%llx unlock_rc=%d\n",
@@ -119,7 +126,15 @@ int _main(struct thread *unused) {
       workspace_result.root,workspace_result.tables,workspace_result.regions,workspace_result.copy_ok);
     if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
   }
+#ifdef PWL_RESIDENT_PROBE
+  if(n>0 && (size_t)n<sizeof(log)) {
+    int extra=snprintf(log+n,sizeof(log)-(size_t)n,"resident efi_status=%d mode=PREPARATION_ONLY code_called=0\n",workspace_result.efi_status);
+    if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
+  }
+  const char *log_path="/mnt/usb0/PS4WL_RESIDENT.LOG";
+#else
   const char *log_path="/mnt/usb0/PS4WL_WORKSPACE.LOG";
+#endif
 #else
   const char *log_path="/mnt/usb0/PS4WL_MEMORY.LOG";
 #endif

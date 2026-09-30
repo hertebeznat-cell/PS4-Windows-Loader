@@ -13,12 +13,12 @@ The module fills the correct Boot Services slots and computes both EFI CRC32s.
 Validation reconstructs the expected tables and checks every byte, including
 unused slots, so recomputing a CRC cannot hide an incorrect pointer.
 
-This is **table preparation only**. The nine function implementations, their
-Microsoft x64 calling conventions and a relocatable resident code image are
-not supplied by this module. Runtime Services, console interfaces and remaining
-Boot Services are absent. These incomplete tables must not be handed to Boot
-Manager. The workspace experiment remains synthetic and unchanged; no new
-console binary or hardware run is requested by this change.
+This module is **table preparation only**. The separate
+[resident preparation experiment](RESIDENT_PROBE.md) now supplies a linked code
+image, Microsoft x64 ABI entries and workspace binding. Runtime Services,
+console interfaces and remaining Boot Services are absent. These incomplete
+tables must not be handed to Boot Manager. The original Workspace-Probe keeps
+its synthetic code fixture; Resident-Probe never calls its code on the PS4.
 
 Host tests exercise addresses above 4 GiB, the standard CRC32 check vector,
 every single-byte table corruption, recomputed checksums with incorrect
@@ -26,7 +26,7 @@ callback/unused-slot pointers, invalid offsets, overlapping spans, truncated
 storage and address overflow. The module is included in the closed freestanding
 native development object and checked by the existing native-core CI steps.
 
-Next: build and audit the actual resident code image, derive offsets from its
-linked symbols, reserve table storage in the workspace, verify all relocations
-and mappings, then connect a returning preparation experiment. No CPU transition
-or Windows launch follows from successful table validation.
+The image build now derives offsets from linked symbols and audits the closed
+code image. Table storage is part of the owned workspace data span. The returning
+resident preparation experiment still needs hardware validation. No CPU
+transition or Windows launch follows from successful table validation.

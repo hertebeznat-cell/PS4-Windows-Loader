@@ -4,6 +4,7 @@
 #include "pwl_ps4_memory.h"
 #include "pwl_firmware.h"
 #include "pwl_pe_loader.h"
+#include "pwl_resident.h"
 
 #define PWL_NATIVE_MAX_TABLES 128U
 #define PWL_NATIVE_MAX_REGIONS 9U
@@ -23,10 +24,7 @@ typedef struct pwl_native_request {
     size_t boot_image_bytes;
 } pwl_native_request_t;
 
-typedef struct pwl_native_data {
-    pwl_fw_memory_t memory;
-    pwl_fw_media_t media;
-} pwl_native_data_t;
+typedef pwl_resident_data_t pwl_native_data_t;
 
 /* Preparation-side owner. Its pointers must never be handed to EFI.
  * Only the physical addresses identify objects in the new identity context.
@@ -57,5 +55,12 @@ pwl_status_t pwl_native_workspace_prepare(const pwl_ps4_memory_api_t *api,
                                           pwl_native_workspace_t *workspace);
 /* On release refusal the owner and spans remain intact for diagnosis/retry. */
 pwl_status_t pwl_native_workspace_release(pwl_native_workspace_t *workspace);
+
+/* Copies the audited position-independent service image, binds its state to
+ * the data PA and prepares tables. Never executes code or activates tables.
+ */
+pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *api,
+    const pwl_native_request_t *request,const pwl_resident_image_t *image,
+    pwl_native_workspace_t *workspace);
 
 #endif

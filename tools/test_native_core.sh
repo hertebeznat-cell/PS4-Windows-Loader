@@ -4,6 +4,12 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 sanitizers=${1:-address,undefined}
 mkdir -p build
+sh tools/build_resident.sh
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+    loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/handoff.c \
+    tests/test_resident_services.c -o build/test-resident-services
+./build/test-resident-services
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/efi_tables.c tests/test_efi_tables.c -o build/test-efi-tables
@@ -33,9 +39,10 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
 ./build/test-pe-loader
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
-    -DPWL_PS4_MEMORY_HOST_TEST \
+    -DPWL_PS4_MEMORY_HOST_TEST -Ibuild/resident \
     loader/src/main.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
-    loader/src/firmware_memory.c loader/src/firmware_media.c loader/src/native_workspace.c \
+    loader/src/firmware_memory.c loader/src/firmware_media.c loader/src/efi_tables.c \
+    loader/src/resident_workspace.c loader/src/native_workspace.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace

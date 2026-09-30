@@ -5,14 +5,27 @@ sdk=${1:?SDK directory required}
 id=${2:?commit id required}
 case "$sdk" in /*) ;; *) sdk="$(pwd)/$sdk" ;; esac
 sh tools/build_kernel_dump.sh "$sdk" "$id"
-out=build/workspace-probe
+mode=${3:-workspace}
+defs=""
+name=PS4WindowsLoader-Workspace-Probe
+document=docs/WORKSPACE_PROBE.md
+case "$mode" in
+ workspace) out=build/workspace-probe ;;
+ resident)
+  sh tools/build_resident.sh
+  out=build/resident-probe
+  defs="-DPWL_RESIDENT_PROBE -Ibuild/resident"
+  name=PS4WindowsLoader-Resident-Probe
+  document=docs/RESIDENT_PROBE.md ;;
+ *) echo 'Unknown preparation mode' >&2; exit 1 ;;
+esac
 mkdir -p "$out"
 gcc -I"$sdk/libPS4/include" -Ipayload -Os -std=c11 -ffreestanding \
  -fno-builtin -fno-stack-protector -nostartfiles -nostdlib -Wall -Wextra -Werror \
  -ffunction-sections -fdata-sections -masm=intel -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
- -DPWL_WORKSPACE_PROBE "-DPS4WL_BUILD_ID=\"$id\"" -c payload/memory_probe.c -o "$out/probe.o"
+ -DPWL_WORKSPACE_PROBE $defs "-DPS4WL_BUILD_ID=\"$id\"" -c payload/memory_probe.c -o "$out/probe.o"
 objects=""
-for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_media native_workspace freestanding; do
+for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_media efi_tables resident_workspace native_workspace freestanding; do
  gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop-distribute-patterns \
   -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only \
   -fpie -fPIC -Wall -Wextra -Werror -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"
@@ -20,7 +33,7 @@ for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_me
 done
 gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop-distribute-patterns \
  -ffunction-sections -fdata-sections -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
- -Wall -Wextra -Werror -DPWL_WORKSPACE_DIAGNOSTIC -Iloader/include -Ipayload \
+ -Wall -Wextra -Werror -DPWL_WORKSPACE_DIAGNOSTIC $defs -Iloader/include -Ipayload \
  -c payload/workspace_probe_core.c -o "$out/workspace_probe_core.o"
 ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 # SDK has pointer globals named memcpy/memset/memmove; keep native functions distinct.
@@ -28,14 +41,14 @@ objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native
  --redefine-sym memmove=pwl_native_memmove "$out/core.o"
 gcc "$sdk/libPS4/crt0.s" "$out/probe.o" "$out/core.o" -nostartfiles -nostdlib -pie \
  -Wl,-T,payload/probe_linker.ld -Wl,--build-id=none -Wl,--gc-sections -Wl,-z,noexecstack \
- -L"$sdk/libPS4" -lPS4 -o "$out/PS4WindowsLoader-Workspace-Probe.elf"
-test -z "$(nm -u "$out/PS4WindowsLoader-Workspace-Probe.elf")"
+ -L"$sdk/libPS4" -lPS4 -o "$out/$name.elf"
+test -z "$(nm -u "$out/$name.elf")"
 objcopy --set-section-flags .bss=alloc,load,contents -O binary \
- "$out/PS4WindowsLoader-Workspace-Probe.elf" "$out/PS4WindowsLoader-Workspace-Probe.bin"
-python3 - "$out" <<'PY'
+ "$out/$name.elf" "$out/$name.bin"
+python3 - "$out" "$name" <<'PY'
 import struct,sys
 from pathlib import Path
-p=Path(sys.argv[1]);e=(p/'PS4WindowsLoader-Workspace-Probe.elf').read_bytes();b=(p/'PS4WindowsLoader-Workspace-Probe.bin').read_bytes()
+p=Path(sys.argv[1]);name=sys.argv[2];e=(p/(name+'.elf')).read_bytes();b=(p/(name+'.bin')).read_bytes()
 if struct.unpack_from('<H',e,16)[0]!=3:raise SystemExit('Raw payload requires PIE/DYN linking; EXEC can introduce absolute SDK addresses')
 o=struct.unpack_from('<Q',e,40)[0];sz,n=struct.unpack_from('<HH',e,58)
 for i in range(n):
@@ -47,5 +60,9 @@ for i in range(n):
 PY
 rm -f "$out"/*.o
 printf '%s\n' "$id" > "$out/COMMIT.txt"
-cp docs/WORKSPACE_PROBE.md "$out/README.md"
+cp "$document" "$out/README.md"
+if [ "$mode" = resident ]; then
+ cp build/resident/MANIFEST.json "$out/RESIDENT-MANIFEST.json"
+ printf '%s\n' 'PREPARATION_ONLY; resident code copied, never executed; no CPU transition' > "$out/MODE.txt"
+fi
 (cd "$out" && sha256sum *.bin *.elf > SHA256SUMS.txt)
