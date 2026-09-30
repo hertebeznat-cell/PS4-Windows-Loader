@@ -257,3 +257,10 @@ bounded CR3/stack switch and restoration in one console invocation and one
 `PS4WL_TRANSITION.LOG`. It refuses a root candidate that does not match live
 CR3. The new variant has not yet run on PS4. It retains the host mappings and
 does not activate the independent EFI root or enter Windows Boot Manager.
+
+
+The [USB-only readback check](docs/USB_LOG_CHECK.md) investigates the reported
+absence of `PS4WL_TRANSITION.LOG` despite successful write notifications. It
+checks filesystem device boundaries and reopens/compares a short `PWL.LOG`
+record. It does not repeat the refused CPU transition or allocate kernel memory.
+The physical USB persistence issue remains unresolved until the file is retrieved.

@@ -1,0 +1,40 @@
+name: USB journal readback check
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'payload/usb_log_check.c'
+      - 'payload/log_readback.h'
+      - 'payload/probe_log.h'
+      - 'payload/probe_start.S'
+      - 'tools/build_workspace_probe.sh'
+      - 'tools/test_native_core.sh'
+      - 'tests/test_log_readback.c'
+      - 'docs/USB_LOG_CHECK.md'
+      - '.github/workflows/usb-log.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        cc: [gcc, clang]
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test journal write and readback
+        run: sh tools/test_native_core.sh
+      - name: Fetch pinned SDK
+        run: |
+          git clone https://github.com/Scene-Collective/ps4-payload-sdk.git dumper-sdk
+          git -C dumper-sdk checkout b7326416c23ce14639e9180a24093bdc5eedb579
+      - name: Build USB-only check
+        run: sh tools/build_workspace_probe.sh dumper-sdk "$GITHUB_SHA" usb-log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-USB-Log-${{ matrix.cc }}
+          path: build/usb-log-check/
+          retention-days: 30

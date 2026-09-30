@@ -64,3 +64,7 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
  -fno-omit-frame-pointer tests/test_raw_journal.c -o build/test-raw-journal
 ./build/test-raw-journal
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer tests/test_log_readback.c -o build/test-log-readback
+./build/test-log-readback

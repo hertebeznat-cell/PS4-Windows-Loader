@@ -25,7 +25,7 @@ static int pwl_probe_log_append(const char *path,const char *text,size_t size,in
     if(close(fd)!=0 && status==PWL_LOG_OK){*error=errno;status=PWL_LOG_CLOSE;}
     return status;
 }
-static int pwl_probe_log_select(const char *name,const char *build,char *path,size_t capacity,
+static inline int pwl_probe_log_select(const char *name,const char *build,char *path,size_t capacity,
                                 int statuses[2],int errors[2])
 {
     char text[192];

@@ -8,6 +8,7 @@ sh tools/build_kernel_dump.sh "$sdk" "$id"
 mode=${3:-workspace}
 defs=""
 probe_defs="-DPWL_WORKSPACE_PROBE"
+probe_source=payload/memory_probe.c
 name=PS4WindowsLoader-Workspace-Probe
 document=docs/WORKSPACE_PROBE.md
 case "$mode" in
@@ -24,13 +25,19 @@ case "$mode" in
   probe_defs=""
   name=PS4WindowsLoader-Root-Clone
   document=docs/ROOT_CLONE.md ;;
+ usb-log)
+  out=build/usb-log-check
+  probe_defs=""
+  probe_source=payload/usb_log_check.c
+  name=PS4WindowsLoader-USB-Log-Check
+  document=docs/USB_LOG_CHECK.md ;;
  *) echo 'Unknown preparation mode' >&2; exit 1 ;;
 esac
 mkdir -p "$out"
 gcc -I"$sdk/libPS4/include" -Ipayload -Os -std=c11 -ffreestanding \
  -fno-builtin -fno-stack-protector -nostartfiles -nostdlib -Wall -Wextra -Werror \
  -ffunction-sections -fdata-sections -masm=intel -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
- $probe_defs $defs "-DPS4WL_BUILD_ID=\"$id\"" -c payload/memory_probe.c -o "$out/probe.o"
+ $probe_defs $defs "-DPS4WL_BUILD_ID=\"$id\"" -c "$probe_source" -o "$out/probe.o"
 objects=""
 for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_media efi_tables resident_workspace native_workspace freestanding; do
  gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop-distribute-patterns \
@@ -60,7 +67,7 @@ ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native_memset \
  --redefine-sym memmove=pwl_native_memmove "$out/core.o"
 startup="$sdk/libPS4/crt0.s"
-if [ "$mode" = root-clone ]; then
+if [ "$mode" = root-clone ] || [ "$mode" = usb-log ]; then
  gcc -c -m64 payload/probe_start.S -o "$out/probe_start.o"
  startup="$out/probe_start.o"
 fi
