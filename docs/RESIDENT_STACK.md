@@ -30,7 +30,10 @@ ordinary resident and workspace tests retain their sanitizers.
    `result=0 passed_mask=1ff last_call=9 release=0 mode=PROCESS_STACK_TEST cpu_switch=0`.
 4. If it hangs, do not repeat the run. Preserve the last log checkpoint.
 
-This new variant has not yet run on the PS4 and may crash. The memory descriptor
+Build `91ce9bc` passed on the PS4: `restored=1 stack_release=0 result=0
+passed_mask=1ff last_call=9 release=0`. The observed local address was inside
+the new stack and the original stack pointer matched after return. Do not repeat
+this completed test. The memory descriptor
 map remains synthetic; returned allocation addresses are never dereferenced.
 It is a process stack test, not execution in the kernel workspace. No CR3,
 interrupt, CPU control-register or platform device changes are made. Passing

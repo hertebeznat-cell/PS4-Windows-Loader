@@ -264,6 +264,23 @@ static void test_resident(void)
     kernel.physical=UINT64_C(0x27a300000);
     assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_OK);
     pwl_native_data_t *d=w.data.prepare_address;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    unsigned char *mutated=w.firmware.prepare_address;
+    mutated[0]^=1;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    mutated[0]^=1;
+    w.mappings[0].writable=1;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    w.mappings[0].writable=0;
+    w.stack.prepare_address=(unsigned char *)w.stack.prepare_address+8;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    w.stack.prepare_address=(unsigned char *)w.stack.prepare_address-8;
+    uint64_t *guard=leaf(&w,w.stack.physical_address-PWL_PAGE_SIZE);
+    assert(guard && !*guard);
+    *guard=(w.stack.physical_address-PWL_PAGE_SIZE)|3;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    *guard=0;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
     assert(d->tpl==4);
     assert(d->efi.system.boot_services==w.data.physical_address+
         offsetof(pwl_native_data_t,efi)+offsetof(pwl_efi_prepared_tables_t,boot));

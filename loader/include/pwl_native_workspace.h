@@ -63,4 +63,9 @@ pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *a
     const pwl_native_request_t *request,const pwl_resident_image_t *image,
     pwl_native_workspace_t *workspace);
 
+/* Preparation-only audit of the owned resident environment. Does not certify
+ * CPU transition readiness or provide a platform memory map. */
+pwl_status_t pwl_native_resident_environment_validate(
+    const pwl_native_workspace_t *workspace, const pwl_resident_image_t *image);
+
 #endif
