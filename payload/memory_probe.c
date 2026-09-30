@@ -7,7 +7,11 @@ SYSCALL(probe_fsync,95);
 #ifndef PS4WL_BUILD_ID
 #define PS4WL_BUILD_ID "local"
 #endif
-#ifdef PWL_WORKSPACE_PROBE
+#ifdef PWL_ROOT_CLONE_PROBE
+#include "root_clone_report.h"
+static volatile pwl_root_clone_report_t root_result;
+#define PWL_PROBE_LABEL "PS4WL Root Clone"
+#elif defined(PWL_WORKSPACE_PROBE)
 #include "workspace_report.h"
 static volatile pwl_workspace_report_t workspace_result;
 #ifdef PWL_RESIDENT_PROBE
@@ -26,7 +30,9 @@ static int report_append(const char *text) {
   return status;
 }
 static int report_begin(void) {
-#ifdef PWL_RESIDENT_PROBE
+#ifdef PWL_ROOT_CLONE_PROBE
+  const char *name="PS4WL_TRANSITION.LOG";
+#elif defined(PWL_RESIDENT_PROBE)
   const char *name="PS4WL_RESIDENT.LOG";
 #elif defined(PWL_WORKSPACE_PROBE)
   const char *name="PS4WL_WORKSPACE.LOG";
@@ -82,7 +88,12 @@ static int probe(struct thread *td,void *args) {
   alloc_fn allocate=(alloc_fn)(base+0x24d4f0);
   free_fn release=(free_fn)(base+0x466460);
   extract_fn extract=(extract_fn)(base+0x573d0);
-#ifdef PWL_WORKSPACE_PROBE
+#ifdef PWL_ROOT_CLONE_PROBE
+  int clone_rc=pwl_root_clone_experiment(map,pmap,allocate,release,extract,&root_result);
+  result.kva=root_result.kva;result.pa=root_result.pa;
+  result.stage=root_result.stage;result.error=clone_rc?root_result.error+20:0;
+  return 0;
+#elif defined(PWL_WORKSPACE_PROBE)
   result.stage=2;
   int workspace_rc=pwl_workspace_experiment(map,pmap,allocate,release,extract,&workspace_result);
   result.kva=workspace_result.kva;result.pa=workspace_result.pa;
@@ -163,6 +174,20 @@ int _main(struct thread *unused) {
     if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
   }
 #endif
+#endif
+#ifdef PWL_ROOT_CLONE_PROBE
+  if(n>0 && (size_t)n<sizeof(log)) {
+    int extra=snprintf(log+n,sizeof(log)-(size_t)n,
+      "transition status=%d error=%u switched=%u restored=%u released=%u cr0=%llx cr3=%llx cr4=%llx efer=%llx source=%llx source_pa=%llx root_before=%llx root_entered=%llx root_after=%llx stack_before=%llx stack_entered=%llx stack_after=%llx mode=IDENTICAL_ROOT_CLONE windows_called=0\n",
+      root_result.transition_status,root_result.error,root_result.switched,root_result.restored,root_result.released,
+      (unsigned long long)root_result.cr0,(unsigned long long)root_result.cr3,
+      (unsigned long long)root_result.cr4,(unsigned long long)root_result.efer,
+      (unsigned long long)root_result.source,(unsigned long long)root_result.source_pa,
+      (unsigned long long)root_result.root_before,(unsigned long long)root_result.root_entered,
+      (unsigned long long)root_result.root_after,(unsigned long long)root_result.stack_before,
+      (unsigned long long)root_result.stack_entered,(unsigned long long)root_result.stack_after);
+    if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
+  }
 #endif
   int log_error=0;
   int log_status=n>0 && (size_t)n<sizeof(log)?

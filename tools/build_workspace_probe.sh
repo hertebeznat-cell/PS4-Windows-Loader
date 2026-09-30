@@ -7,6 +7,7 @@ case "$sdk" in /*) ;; *) sdk="$(pwd)/$sdk" ;; esac
 sh tools/build_kernel_dump.sh "$sdk" "$id"
 mode=${3:-workspace}
 defs=""
+probe_defs="-DPWL_WORKSPACE_PROBE"
 name=PS4WindowsLoader-Workspace-Probe
 document=docs/WORKSPACE_PROBE.md
 case "$mode" in
@@ -17,13 +18,19 @@ case "$mode" in
   defs="-DPWL_RESIDENT_PROBE -Ibuild/resident"
   name=PS4WindowsLoader-Resident-Probe
   document=docs/RESIDENT_PROBE.md ;;
+ root-clone)
+  out=build/root-clone
+  defs="-DPWL_ROOT_CLONE_PROBE"
+  probe_defs=""
+  name=PS4WindowsLoader-Root-Clone
+  document=docs/ROOT_CLONE.md ;;
  *) echo 'Unknown preparation mode' >&2; exit 1 ;;
 esac
 mkdir -p "$out"
 gcc -I"$sdk/libPS4/include" -Ipayload -Os -std=c11 -ffreestanding \
  -fno-builtin -fno-stack-protector -nostartfiles -nostdlib -Wall -Wextra -Werror \
  -ffunction-sections -fdata-sections -masm=intel -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
- -DPWL_WORKSPACE_PROBE $defs "-DPS4WL_BUILD_ID=\"$id\"" -c payload/memory_probe.c -o "$out/probe.o"
+ $probe_defs $defs "-DPS4WL_BUILD_ID=\"$id\"" -c payload/memory_probe.c -o "$out/probe.o"
 objects=""
 for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_media efi_tables resident_workspace native_workspace freestanding; do
  gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop-distribute-patterns \
@@ -35,6 +42,18 @@ gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop
  -ffunction-sections -fdata-sections -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
  -Wall -Wextra -Werror -DPWL_WORKSPACE_DIAGNOSTIC $defs -Iloader/include -Ipayload \
  -c payload/workspace_probe_core.c -o "$out/workspace_probe_core.o"
+if [ "$mode" = root-clone ]; then
+ for unit in cpu_state root_clone; do
+  gcc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector \
+   -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"
+  objects="$objects $out/$unit.o"
+ done
+ gcc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector \
+  -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include -Ipayload \
+  -c payload/root_clone_probe_core.c -o "$out/root_clone_probe_core.o"
+ gcc -c -m64 loader/src/root_clone_call.S -o "$out/root_clone_call.o"
+ objects="$objects $out/root_clone_probe_core.o $out/root_clone_call.o"
+fi
 ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 # SDK has pointer globals named memcpy/memset/memmove; keep native functions distinct.
 objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native_memset \
@@ -64,5 +83,8 @@ cp "$document" "$out/README.md"
 if [ "$mode" = resident ]; then
  cp build/resident/MANIFEST.json "$out/RESIDENT-MANIFEST.json"
  printf '%s\n' 'PREPARATION_ONLY; resident code copied, never executed; no CPU transition' > "$out/MODE.txt"
+fi
+if [ "$mode" = root-clone ]; then
+ printf '%s\n' 'IDENTICAL_ROOT_CLONE; bounded CR3/stack round trip; no EFI root activation; Windows not called' > "$out/MODE.txt"
 fi
 (cd "$out" && sha256sum *.bin *.elf > SHA256SUMS.txt)

@@ -42,3 +42,9 @@ Compatible platform checks should run in one console transaction, stop on the
 first failed gate and write one log. Completed console tests need not be run
 again individually. No transition binary is offered until the above platform
 requirements are implemented and checked. Windows Boot Manager is not entered.
+
+
+A separate [identical-root diagnostic](ROOT_CLONE.md) now tests a narrower
+transition using an exact copy of the active root, so it retains the existing
+mappings rather than attempting to enter the independent EFI environment.
+It does not include or call the general address_call entry described above.

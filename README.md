@@ -249,3 +249,11 @@ strings through screen notifications, with optional USB logging. It provides
 photographed observations for the 13.52 binding investigation. The test completed
 and does not need repeating. Allocator confirmation and Windows boot remain
 unresolved; see its hardware-results section for the exact evidence still needed.
+
+
+The next [returning root-clone diagnostic](docs/ROOT_CLONE.md) combines current
+CPU/root checks, physical translation, a complete identical root copy, a
+bounded CR3/stack switch and restoration in one console invocation and one
+`PS4WL_TRANSITION.LOG`. It refuses a root candidate that does not match live
+CR3. The new variant has not yet run on PS4. It retains the host mappings and
+does not activate the independent EFI root or enter Windows Boot Manager.
