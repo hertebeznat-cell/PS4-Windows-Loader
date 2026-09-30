@@ -40,3 +40,9 @@ interrupt, CPU control-register or platform device changes are made. Passing
 does not establish privileged resident execution or a Windows handoff.
 
 Build: `sh tools/build_resident_calls.sh SDK_DIRECTORY COMMIT stack`.
+
+
+The following environment audit also passed on PS4 in build `0a5199ac`:
+`rc=0 stage=5 error=0 prep=0 tables_status=0 release=0 copies=1 efi_status=0`.
+Its allocation started at PA `0x100000`, with root `0x105000`. This is the new
+entry appended after the earlier `64a2f64` result. Neither test activated tables.

@@ -10,7 +10,8 @@ for unit in main pe_loader handoff paging cpu_state ps4_binding ps4_memory firmw
         -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -fPIE \
         -Iloader/include -c "loader/src/$unit.c" -o "$output/$unit.o"
 done
-ld -r "$output/main.o" "$output/pe_loader.o" "$output/handoff.o" "$output/paging.o" "$output/cpu_state.o" \
+"$compiler" -c -m64 loader/src/address_call.S -o "$output/address_call.o"
+ld -r "$output/address_call.o" "$output/main.o" "$output/pe_loader.o" "$output/handoff.o" "$output/paging.o" "$output/cpu_state.o" \
     "$output/ps4_binding.o" "$output/ps4_memory.o" "$output/firmware_memory.o" "$output/firmware_media.o" \
     "$output/efi_tables.o" "$output/resident_workspace.o" "$output/resident_selftest.o" "$output/native_workspace.o" "$output/freestanding.o" -o "$output/ps4wl-native-core.o"
 nm -u "$output/ps4wl-native-core.o" > "$output/UNDEFINED-SYMBOLS.txt"

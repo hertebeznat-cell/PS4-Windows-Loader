@@ -212,7 +212,12 @@ Resident preparation now audits the owned spans, exact code/data/table mappings,
 both unmapped stack guards, code bytes and state binding, and EFI table pointers
 as one environment check. A failed audit unwinds preparation. This is preparation
 only; a recoverable CPU transition and complete Boot Manager services remain
-necessary before entering `bootmgfw.efi`.
+necessary before entering `bootmgfw.efi`. The environment audit passed on PS4
+in build `0a5199ac`; it does not need repeating. The
+[returning address-context entry](docs/ADDRESS_TRANSITION.md) is now compiled
+into the development object, with platform mapping and exception dependencies
+still required before it can be included in a console test. It has not executed
+on hardware. No emulator is used.
 
 1. Replace the user-process execution path with a platform-owned boot context
    capable of executing privileged CPU instructions; review the shutdown before
