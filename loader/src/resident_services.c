@@ -7,7 +7,7 @@
 /* RIP-relative read from an eight-byte read-only slot. Preparation patches the
  * copied slot to the destination data PA; no process pointers survive entry.
  */
-extern const uint64_t pwl_resident_binding;
+extern const uint64_t pwl_resident_binding __attribute__((visibility("hidden")));
 static pwl_resident_data_t *state(void)
 {
     return (pwl_resident_data_t *)(uintptr_t)pwl_resident_binding;

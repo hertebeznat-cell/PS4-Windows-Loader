@@ -9,11 +9,11 @@ for unit in resident_services firmware_memory efi_tables; do
       -ffreestanding -fno-builtin -fno-stack-protector -fno-common \
       -fno-asynchronous-unwind-tables \
       -ffunction-sections -fdata-sections -mno-red-zone -mgeneral-regs-only \
-      -fpie -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"
+      -fPIC -fvisibility=hidden -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"
 done
 "$compiler" -c loader/src/resident_binding.S -o "$out/binding.o"
 # All nine public callbacks are roots, including those unused by other code.
-ld --no-undefined --gc-sections -T loader/resident.ld \
+ld --no-undefined --no-relax --gc-sections -T loader/resident.ld \
   -u pwl_resident_raise_tpl -u pwl_resident_restore_tpl \
   -u pwl_resident_allocate_pages -u pwl_resident_free_pages \
   -u pwl_resident_get_memory_map -u pwl_resident_exit_boot_services \
