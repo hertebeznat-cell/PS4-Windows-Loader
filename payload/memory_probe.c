@@ -9,6 +9,7 @@ SYSCALL(probe_fsync,95);
 #endif
 #ifdef PWL_ROOT_CLONE_PROBE
 #include "root_clone_report.h"
+#include "raw_journal.h"
 static volatile pwl_root_clone_report_t root_result;
 #define PWL_PROBE_LABEL "PS4WL Root Clone"
 #elif defined(PWL_WORKSPACE_PROBE)
@@ -129,8 +130,7 @@ static int probe(struct thread *td,void *args) {
   return 0;
 #endif
 }
-int _main(struct thread *unused) {
-  UNUSED(unused);initKernel();initLibc();
+static __attribute__((noinline)) int run_test(void) {
   printf_notification(PWL_PROBE_LABEL ": entered %s",PS4WL_BUILD_ID);
   if(report_begin())return 1;
   if(get_firmware()!=1352 || !is_jailbroken()) {
@@ -196,4 +196,40 @@ int _main(struct thread *unused) {
   else printf_notification(PWL_PROBE_LABEL ": report saved %s",report_path);
   if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
   return rc || unlock_rc || result.error || result.stage!=5 || log_status;
+}
+
+#ifdef PWL_ROOT_CLONE_PROBE
+static __attribute__((noinline)) void raw_journal_failure(int s0,long e0,int s1,long e1) {
+ printf_notification(PWL_PROBE_LABEL ": early USB0 stage=%d errno=%lld; stopped",s0,-e0);
+ printf_notification(PWL_PROBE_LABEL ": early USB1 stage=%d errno=%lld; stopped",s1,-e1);
+}
+#endif
+int _main(struct thread *unused) {
+  UNUSED(unused);
+#ifdef PWL_ROOT_CLONE_PROBE
+  static const char paths[2][40]={"/mnt/usb0/PS4WL_TRANSITION.LOG","/mnt/usb1/PS4WL_TRANSITION.LOG"};
+  static const char entered[]="build=" PS4WL_BUILD_ID " checkpoint=RAW_ENTERED mode=DIRECT_USB_JOURNAL\n";
+  static const char kernel_ready[]="checkpoint=KERNEL_LIBRARY_READY\n";
+  static const char libc_ready[]="checkpoint=LIBC_READY\n";
+  int selected=-1,statuses[2];long errors[2];
+  for(unsigned i=0;i<2;i++) {
+    statuses[i]=pwl_raw_journal_append(paths[i],entered,sizeof(entered)-1,&errors[i]);
+    if(!statuses[i]){selected=(int)i;break;}
+  }
+  initKernel();
+  if(selected>=0) {
+    long error;
+    if(pwl_raw_journal_append(paths[selected],kernel_ready,sizeof(kernel_ready)-1,&error))return 1;
+  }
+  initLibc();
+  if(selected<0) {
+    raw_journal_failure(statuses[0],errors[0],statuses[1],errors[1]);
+    return 1;
+  }
+  long error;
+  if(pwl_raw_journal_append(paths[selected],libc_ready,sizeof(libc_ready)-1,&error))return 1;
+#else
+  initKernel();initLibc();
+#endif
+  return run_test();
 }

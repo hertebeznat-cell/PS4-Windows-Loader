@@ -52,13 +52,19 @@ if [ "$mode" = root-clone ]; then
   -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include -Ipayload \
   -c payload/root_clone_probe_core.c -o "$out/root_clone_probe_core.o"
  gcc -c -m64 loader/src/root_clone_call.S -o "$out/root_clone_call.o"
- objects="$objects $out/root_clone_probe_core.o $out/root_clone_call.o"
+ gcc -c -m64 payload/raw_journal.S -o "$out/raw_journal.o"
+ objects="$objects $out/root_clone_probe_core.o $out/root_clone_call.o $out/raw_journal.o"
 fi
 ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 # SDK has pointer globals named memcpy/memset/memmove; keep native functions distinct.
 objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native_memset \
  --redefine-sym memmove=pwl_native_memmove "$out/core.o"
-gcc "$sdk/libPS4/crt0.s" "$out/probe.o" "$out/core.o" -nostartfiles -nostdlib -pie \
+startup="$sdk/libPS4/crt0.s"
+if [ "$mode" = root-clone ]; then
+ gcc -c -m64 payload/probe_start.S -o "$out/probe_start.o"
+ startup="$out/probe_start.o"
+fi
+gcc "$startup" "$out/probe.o" "$out/core.o" -nostartfiles -nostdlib -pie \
  -Wl,-T,payload/probe_linker.ld -Wl,--build-id=none -Wl,--gc-sections -Wl,-z,noexecstack \
  -L"$sdk/libPS4" -lPS4 -o "$out/$name.elf"
 test -z "$(nm -u "$out/$name.elf")"

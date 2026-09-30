@@ -41,6 +41,15 @@ crash. Do not repeat a hung run.
   This is an intentional refusal before allocation/switching. Send the log;
   do not repeat or substitute an address.
 
+The root-clone build now aligns its entry stack explicitly and writes
+`RAW_ENTERED` through direct open/write/fsync/close system calls, before SDK
+initialization, formatting and notifications. The small entry function keeps
+large notification/result frames out of this first stage. It handles partial
+writes and EINTR without libc errno and records `KERNEL_LIBRARY_READY` and
+`LIBC_READY` separately. A USB failure stops the experiment. The source root
+and switching logic are unchanged by this journal fix. Absence of the previous
+log alone does not establish which startup operation failed.
+
 A durable USB STARTING_TEST checkpoint is saved before the kernel callback;
 no USB calls are possible while inside the bounded transition. If it hangs,
 the last persistent checkpoint will therefore be STARTING_TEST. Successful

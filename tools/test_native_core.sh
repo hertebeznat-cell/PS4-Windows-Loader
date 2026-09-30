@@ -60,3 +60,7 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
  loader/src/root_clone.c tests/test_root_clone.c -o build/test-root-clone
 ./build/test-root-clone
 "$compiler" -c -m64 loader/src/root_clone_call.S -o build/root-clone-call-check.o
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer tests/test_raw_journal.c -o build/test-raw-journal
+./build/test-raw-journal
