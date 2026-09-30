@@ -354,6 +354,34 @@ static void test_resident_boot_image(void)
     assert(!kernel.allocation && kernel.frees==frees+2);
 }
 
+static void test_resident_files(void)
+{
+    unsigned char archive[4096]={0};
+    memcpy(archive,"PWLFILES",8);
+    pe32(archive+8,1);pe32(archive+12,1);pe64(archive+16,sizeof(archive));
+    archive[24]='\\';pe64(archive+24+512,560);pe32(archive+24+528,1);
+    pwl_native_workspace_t w={0};pwl_ps4_memory_api_t a=api();
+    pwl_native_request_t r={NULL,0,archive,sizeof(archive),65536,65536,16,0x1234,NULL,0};
+    kernel.physical=UINT64_C(0x27a300000);
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_OK);
+    pwl_native_data_t *data=w.data.prepare_address;
+    assert(data->files_enabled==1 && data->filesystem[0]==0x10000);
+    assert(data->filesystem[1]==w.firmware.physical_address+resident_image.callbacks[17]);
+    assert(data->protocols[1].interface_address==w.data.physical_address+
+           offsetof(pwl_native_data_t,filesystem));
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    data->files_enabled=0;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->files_enabled=1;data->media.bytes=UINT64_MAX;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->media.bytes=sizeof(archive);data->file_template.functions[0]++;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    assert(pwl_native_workspace_release(&w)==PWL_OK);
+    pe32(archive+12,UINT32_MAX);
+    assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_ERR_BAD_IMAGE);
+    assert(!kernel.allocation && !w.arena.kernel_address);
+}
+
 int main(void)
 {
     resident_image=resident_fixture();
@@ -362,6 +390,7 @@ int main(void)
     test_boot_image();
     test_resident();
     test_resident_boot_image();
+    test_resident_files();
     puts("native workspace: owned PA/KVA, resident services, guarded mappings and rollback passed");
     return 0;
 }

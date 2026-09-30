@@ -1,6 +1,8 @@
 #include "pwl_native_workspace.h"
 static const pwl_efi_guid_t loaded_guid={{0xa1,0x31,0x1b,0x5b,0x62,0x95,0xd2,0x11,
                                         0x8e,0x3f,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
+static const pwl_efi_guid_t filesystem_guid={{0x22,0x5b,0x4e,0x96,0x59,0x64,0xd2,0x11,
+                                             0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 
 pwl_status_t pwl_resident_image_validate(const pwl_resident_image_t *b)
 {
@@ -50,11 +52,32 @@ pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *a
                 w->data.physical_address+offsetof(pwl_native_data_t,loaded_image),loaded_guid};
             d->protocol_next_handle=r->image_handle;
         }
+        const unsigned char *media=w->media.prepare_address;
+        const unsigned char magic[8]={'P','W','L','F','I','L','E','S'};
+        int archive=1;
+        for (size_t i=0;i<8;i++) if (media[i]!=magic[i]) archive=0;
+        if (archive) {
+            status=pwl_files_validate(media,r->disk_bytes);
+            if (status!=PWL_OK) goto cleanup;
+            d->filesystem[0]=UINT64_C(0x10000);
+            d->filesystem[1]=w->firmware.physical_address+blob->callbacks[17];
+            d->file_template.revision=UINT64_C(0x10000);
+            for (size_t i=0;i<10;i++)
+                d->file_template.functions[i]=w->firmware.physical_address+blob->callbacks[18+i];
+            uint64_t handle=r->image_handle==1 ? 2 : 1;
+            d->protocols[1]=(pwl_resident_protocol_t){handle,
+                w->data.physical_address+offsetof(pwl_native_data_t,filesystem),filesystem_guid};
+            if (d->protocol_next_handle<handle) d->protocol_next_handle=handle;
+            d->files_enabled=1;
+        }
         status=pwl_native_resident_environment_validate(w,blob);
         if (status==PWL_OK) return PWL_OK;
     }
-    pwl_status_t cleanup=pwl_native_workspace_release(w);
-    return cleanup==PWL_OK ? status : cleanup;
+cleanup:
+    {
+        pwl_status_t release=pwl_native_workspace_release(w);
+        return release==PWL_OK ? status : release;
+    }
 }
 
 static int span_owned(const pwl_native_workspace_t *w,const pwl_owned_span_t *s)
@@ -149,6 +172,31 @@ pwl_status_t pwl_native_resident_environment_validate(
         if (actual[i]!=expected) return PWL_ERR_INVALID_ARGUMENT;
     }
     const pwl_native_data_t *data=w->data.prepare_address;
+    if (data->media.physical_address!=w->media.physical_address ||
+        !data->media.bytes || data->media.bytes>w->media.size ||
+        data->media.block_size!=512 || data->media.bytes%512)
+        return PWL_ERR_INVALID_ARGUMENT;
+    const unsigned char *media_bytes=w->media.prepare_address;
+    const unsigned char file_magic[8]={'P','W','L','F','I','L','E','S'};
+    unsigned has_archive=1;
+    for (size_t i=0;i<8;i++) if (media_bytes[i]!=file_magic[i]) has_archive=0;
+    if (data->files_enabled!=has_archive) return PWL_ERR_INVALID_ARGUMENT;
+    if (data->files_enabled) {
+        if (data->files_enabled!=1 || pwl_files_validate(w->media.prepare_address,
+                (size_t)data->media.bytes)!=PWL_OK ||
+            data->filesystem[0]!=UINT64_C(0x10000) ||
+            data->filesystem[1]!=w->firmware.physical_address+image->callbacks[17] ||
+            data->file_template.revision!=UINT64_C(0x10000) ||
+            !data->protocols[1].handle ||
+            data->protocols[1].interface_address!=w->data.physical_address+
+                offsetof(pwl_native_data_t,filesystem)) return PWL_ERR_INVALID_ARGUMENT;
+        for (size_t i=0;i<16;i++)
+            if (data->protocols[1].guid.bytes[i]!=filesystem_guid.bytes[i])
+                return PWL_ERR_INVALID_ARGUMENT;
+        for (size_t i=0;i<10;i++)
+            if (data->file_template.functions[i]!=w->firmware.physical_address+image->callbacks[18+i])
+                return PWL_ERR_INVALID_ARGUMENT;
+    }
     if (w->boot.size) {
         pwl_efi_loaded_image_t expected={0};
         expected.revision=0x1000;

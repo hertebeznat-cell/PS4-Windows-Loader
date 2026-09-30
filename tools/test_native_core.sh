@@ -15,7 +15,7 @@ sh tools/build_resident.sh
     loader/src/main.c loader/src/pe_loader.c loader/src/paging.c \
     loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
     loader/src/native_workspace.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
-    loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/handoff.c \
+    loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
     tests/test_resident_services.c -o build/test-resident-services
 ./build/test-resident-services
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
@@ -37,14 +37,19 @@ fi
 grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
-    loader/src/handoff.c loader/src/firmware_memory.c loader/src/firmware_media.c \
+    loader/src/handoff.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/firmware_media.c \
     tests/test_firmware.c -o build/test-firmware
 ./build/test-firmware
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
-    loader/src/handoff.c loader/src/firmware_memory.c tests/test_pool.c \
+    loader/src/handoff.c loader/src/firmware_memory.c loader/src/firmware_files.c tests/test_pool.c \
     -o build/test-pool
 ./build/test-pool
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+    loader/src/firmware_files.c tests/test_files.c -o build/test-files
+./build/test-files
+python3 tests/test_pack_files.py
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/main.c loader/src/pe_loader.c tests/test_pe_loader.c \
@@ -55,7 +60,7 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
     -DPWL_PS4_MEMORY_HOST_TEST -Ibuild/resident \
     loader/src/main.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
-    loader/src/firmware_memory.c loader/src/firmware_media.c loader/src/efi_tables.c \
+    loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/firmware_media.c loader/src/efi_tables.c \
     loader/src/resident_workspace.c loader/src/native_workspace.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace

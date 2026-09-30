@@ -2,6 +2,17 @@
 #define PWL_RESIDENT_H
 #include "pwl_firmware.h"
 #include "pwl_efi_tables.h"
+#include "pwl_files.h"
+#define PWL_RESIDENT_FILES 32U
+typedef struct pwl_efi_file_protocol {
+    uint64_t revision,functions[10];
+} pwl_efi_file_protocol_t;
+typedef struct pwl_resident_file {
+    pwl_efi_file_protocol_t protocol;
+    pwl_file_view_t view;
+    uint64_t position;
+    unsigned active;
+} pwl_resident_file_t;
 #define PWL_RESIDENT_PROTOCOLS 64U
 typedef struct pwl_efi_guid { unsigned char bytes[16]; } pwl_efi_guid_t;
 typedef struct pwl_resident_protocol {
@@ -27,6 +38,10 @@ typedef struct pwl_resident_data {
     pwl_resident_protocol_t protocols[PWL_RESIDENT_PROTOCOLS];
     uint64_t protocol_next_handle;
     pwl_efi_loaded_image_t loaded_image;
+    uint64_t filesystem[2]; /* revision and OpenVolume destination address */
+    pwl_efi_file_protocol_t file_template;
+    pwl_resident_file_t files[PWL_RESIDENT_FILES];
+    unsigned files_enabled;
 } pwl_resident_data_t;
 
 typedef struct pwl_resident_image {

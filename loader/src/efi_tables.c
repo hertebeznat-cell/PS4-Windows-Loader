@@ -7,7 +7,7 @@ _Static_assert(sizeof(pwl_efi_boot_table_t) == 376, "AMD64 Boot Services ABI");
 _Static_assert(offsetof(pwl_efi_system_table_t, boot_services) == 96, "Boot Services offset");
 _Static_assert(offsetof(pwl_efi_boot_table_t, functions) == 24, "Boot Services slots");
 
-static const unsigned slots[PWL_EFI_PREPARED_CALLBACKS] =
+static const unsigned slots[PWL_EFI_BOOT_CALLBACKS] =
     {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37};
 
 uint32_t pwl_efi_crc32(const void *bytes, size_t size)
@@ -53,7 +53,7 @@ pwl_status_t pwl_efi_tables_prepare(const pwl_efi_table_spec_t *s,
     out->boot.header = (pwl_efi_header_t){UINT64_C(0x56524553544f4f42),
                                         0x00020000, sizeof(out->boot), 0, 0};
     out->system.boot_services = spec.data_pa + offsetof(pwl_efi_prepared_tables_t, boot);
-    for (size_t i = 0; i < PWL_EFI_PREPARED_CALLBACKS; ++i)
+    for (size_t i = 0; i < PWL_EFI_BOOT_CALLBACKS; ++i)
         out->boot.functions[slots[i]] = spec.code_pa + spec.callback_offsets[i];
     out->boot.header.crc32 = pwl_efi_crc32(&out->boot, sizeof(out->boot));
     out->system.header.crc32 = pwl_efi_crc32(&out->system, sizeof(out->system));

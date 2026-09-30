@@ -34,7 +34,9 @@ if re.search(r'\b(syscall|sysenter|cli|sti|hlt|rdmsr|wrmsr)\b|%cr[0-9]', dis):
 names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'get_memory_map', 'exit_boot_services', 'calculate_crc32', 'copy_mem', 'set_mem',
          'allocate_pool', 'free_pool', 'install_protocol', 'reinstall_protocol',
-         'uninstall_protocol', 'handle_protocol', 'locate_handle', 'locate_protocol']
+         'uninstall_protocol', 'handle_protocol', 'locate_handle', 'locate_protocol',
+         'open_volume', 'file_open', 'file_close', 'file_delete', 'file_read', 'file_write',
+         'file_get_position', 'file_set_position', 'file_get_info', 'file_set_info', 'file_flush']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()

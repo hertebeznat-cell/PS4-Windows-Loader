@@ -105,6 +105,66 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     assert(locate(&a,NULL,&interface)==PWL_EFI_NOT_FOUND);
 }
 
+
+typedef uint64_t (EFI *volume_fn)(void *,void **);
+typedef uint64_t (EFI *file_open_fn)(void *,void **,const uint16_t *,uint64_t,uint64_t);
+typedef uint64_t (EFI *file_close_fn)(void *);
+typedef uint64_t (EFI *file_read_fn)(void *,size_t *,void *);
+typedef uint64_t (EFI *file_write_fn)(void *,size_t *,const void *);
+typedef uint64_t (EFI *file_set_info_fn)(void *,const pwl_efi_guid_t *,size_t,const void *);
+typedef uint64_t (EFI *file_get_pos_fn)(void *,uint64_t *);
+typedef uint64_t (EFI *file_set_pos_fn)(void *,uint64_t);
+typedef uint64_t (EFI *file_info_fn)(void *,const pwl_efi_guid_t *,size_t *,void *);
+static void file_put(unsigned char *p,uint64_t n,unsigned bytes)
+{ for (unsigned i=0;i<bytes;i++) p[i]=(unsigned char)(n>>(i*8)); }
+static void run_files(unsigned char *code,pwl_resident_data_t *d)
+{
+    unsigned char archive[4096]={0};memcpy(archive,"PWLFILES",8);
+    file_put(archive+8,1,4);file_put(archive+12,3,4);file_put(archive+16,sizeof(archive),8);
+    const char *paths[]={"\\","\\Boot","\\Boot\\BCD"};
+    for (unsigned i=0;i<3;i++) {
+        unsigned char *r=archive+24+i*536;
+        for (size_t k=0;paths[i][k];k++) r[k*2]=(unsigned char)paths[i][k];
+        file_put(r+512,2048,8);file_put(r+520,i==2 ? 5 : 0,8);file_put(r+528,i==2 ? 0 : 1,4);
+    }
+    memcpy(archive+2048,"HELLO",5);
+    assert(pwl_files_validate(archive,sizeof(archive))==PWL_OK);
+    d->media.physical_address=(uintptr_t)archive;d->media.bytes=sizeof(archive);
+    d->files_enabled=1;d->file_template.revision=0x10000;
+    for (size_t i=0;i<10;i++) d->file_template.functions[i]=(uintptr_t)code+resident_image.callbacks[18+i];
+    LOAD(volume_fn,volume,17);LOAD(file_open_fn,open,18);LOAD(file_close_fn,close,19);
+    LOAD(file_close_fn,delete_file,20);LOAD(file_read_fn,read,21);
+    LOAD(file_write_fn,write_file,22);LOAD(file_set_info_fn,set_info,26);
+    LOAD(file_get_pos_fn,get_position,23);LOAD(file_set_pos_fn,set_position,24);
+    LOAD(file_info_fn,get_info,25);LOAD(file_close_fn,flush,27);
+    void *root=NULL,*file=NULL;uint16_t path[]={'b','o','o','t','\\','B','C','D',0};
+    assert(volume(d->filesystem,&root)==0 && root);
+    assert(open(root,&file,path,1,0)==0 && file);
+    assert(open(root,&file,path,3,0)==PWL_EFI_WRITE_PROTECTED);
+    char output[128]={0};size_t bytes=2;uint64_t position=0;
+    assert(read(file,&bytes,output)==0 && bytes==2 && !memcmp(output,"HE",2));
+    assert(get_position(file,&position)==0 && position==2);
+    bytes=sizeof(output);assert(read(file,&bytes,output)==0 && bytes==3 && !memcmp(output,"LLO",3));
+    assert(set_position(file,UINT64_MAX)==0);bytes=1;
+    assert(read(file,&bytes,output)==0 && bytes==0);
+    const pwl_efi_guid_t info={{0x92,0x6e,0x57,0x09,0x3f,0x6d,0xd2,0x11,0x8e,0x39,0,0xa0,0xc9,0x69,0x72,0x3b}};
+    bytes=0;assert(get_info(file,&info,&bytes,NULL)==PWL_EFI_BUFFER_TOO_SMALL && bytes==88);
+    assert(get_info(file,&info,&bytes,output)==0 && output[8]==5 && output[80]=='B');
+    assert(write_file(file,&bytes,output)==PWL_EFI_WRITE_PROTECTED);
+    assert(set_info(file,&info,bytes,output)==PWL_EFI_WRITE_PROTECTED);
+    assert(flush(file)==0 && close(file)==0 && close(file)==PWL_EFI_INVALID_PARAMETER);
+    bytes=sizeof(output);assert(read(root,&bytes,output)==0 && output[80]=='B');
+    bytes=sizeof(output);assert(read(root,&bytes,output)==0 && bytes==0);
+    assert(set_position(root,0)==0);
+    uint16_t up[]={'.','.',0};assert(open(root,&file,up,1,0)==PWL_EFI_ACCESS_DENIED);
+    assert(delete_file(root)==2);
+    assert(close((void *)1)==PWL_EFI_INVALID_PARAMETER);
+    void *handles[PWL_RESIDENT_FILES];
+    for (size_t i=0;i<PWL_RESIDENT_FILES;i++) assert(volume(d->filesystem,&handles[i])==0);
+    assert(volume(d->filesystem,&root)==PWL_EFI_OUT_OF_RESOURCES);
+    for (size_t i=0;i<PWL_RESIDENT_FILES;i++) assert(close(handles[i])==0);
+    d->files_enabled=0;
+}
 static void run_copy(void)
 {
     size_t code_bytes=(sizeof(resident_bytes)+4095U)&~(size_t)4095U;
@@ -147,6 +207,7 @@ static void run_copy(void)
     assert(pool_alloc(2,0,&pool)==0 && pool_free(pool)==0);
     assert(pool_alloc(2,1,NULL)==PWL_EFI_INVALID_PARAMETER);
     run_protocols(code,&d);
+    run_files(code,&d);
     uint32_t result=0;
     assert(crc("123456789",9,&result)==0 && result==UINT32_C(0xcbf43926));
     assert(crc(NULL,9,&result)==PWL_EFI_INVALID_PARAMETER);
