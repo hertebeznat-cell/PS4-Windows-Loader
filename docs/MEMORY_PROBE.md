@@ -75,3 +75,13 @@ Compilation uses no red zone or generated SIMD in the callback. Raw packaging
 must cover every allocated section with zero-filled BSS and no relocations.
 An RWX linker segment is expected for the sender's raw payload format; this
 is not a Windows executable or a hardened process image.
+
+## Packaging correction after first console attempt
+
+The first experiment produced no payload notifications and no USB file while
+the console stayed responsive. Inspection found that no-pie linking relaxed
+SDK pointer accesses into absolute image addresses (for example the memcpy
+global address), unsuitable for relocation of a raw binary. The corrected
+build explicitly links PIE, checks ELF type DYN and rejects relocations.
+The inspected memcpy access is now RIP-relative. The initial hardware attempt
+therefore does not establish that allocation or any VM call was reached.
