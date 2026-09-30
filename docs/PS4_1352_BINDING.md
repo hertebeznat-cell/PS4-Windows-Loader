@@ -188,3 +188,16 @@ Next: trace the installed syscall-11 handler and its indirection, determine
 thread/lock/preemption constraints, then design a returning one-page allocation,
 translation and release diagnostic with independent error reporting. Do not
 switch CR3, stop APs, or enter Microsoft code during that diagnostic.
+
+
+## Guarded returning experiment
+
+The exact installed handler FF 26 instruction tail-dispatches through the first
+argument at RSI; there is no additional indirection to a separate GoldHEN code
+trampoline. The candidate mutex entry +0x378A80 obtains current thread from GS:0,
+rejects a nonzero DWORD at thread+0x128, and increments a WORD at thread+0xFC.
+The experimental [Memory-Probe](MEMORY_PROBE.md) conservatively checks both
+counters are zero, callback TD matches GS:0, CPL/IF/DF, observed version/code,
+map/root pointer shape and user-payload mlock before attempting one page.
+These guards narrow the experiment; they do not approve the production binding
+or prove the full scheduler/VM contract. No hardware result is recorded yet.
