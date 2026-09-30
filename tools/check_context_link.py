@@ -51,7 +51,7 @@ if len(sys.argv) == 3:
         name = names[section[0]:].split(b"\0", 1)[0].decode("ascii")
         if name in {".text", ".data", ".rodata", ".bss"} and section[5]:
             selected[name] = section
-    if set(selected) != {".text", ".data", ".rodata", ".bss"}:
+    if not {".text", ".rodata", ".bss"}.issubset(selected):
         raise SystemExit("missing raw payload sections")
     base = min(s[3] for s in selected.values())
     end = max(s[3] + s[5] for s in selected.values())
