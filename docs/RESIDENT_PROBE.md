@@ -32,6 +32,14 @@ not be presented to Boot Manager.
 
 ## Single hardware preparation test
 
+USB journal version 2 creates and syncs `PS4WL_RESIDENT.LOG` on USB0 or USB1
+before checking the environment or locking memory. It writes `ENTERED` and
+`STARTING_TEST` checkpoints before entering the experiment. An early rejection
+records its reason; a test that does not return leaves the last checkpoint.
+If neither USB accepts a synced entry, the experiment is not started. Screen
+notifications show the operation stage and errno for both USB paths. Write,
+sync and close failures are returned as logging failures rather than success.
+
 Hardware behavior for this new build is unverified. The larger-memory test
 was reported successful in the prior conversation; this new resident variant
 still needs its own returning result. A hang or crash remains possible.

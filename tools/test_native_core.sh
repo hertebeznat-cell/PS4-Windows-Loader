@@ -4,6 +4,10 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 sanitizers=${1:-address,undefined}
 mkdir -p build
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer \
+    tests/test_probe_log.c -o build/test-probe-log
+./build/test-probe-log
 sh tools/build_resident.sh
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \

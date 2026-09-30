@@ -3,6 +3,7 @@
 #include "syscall.h"
 int probe_fsync(int fd);
 SYSCALL(probe_fsync,95);
+#include "probe_log.h"
 #ifndef PS4WL_BUILD_ID
 #define PS4WL_BUILD_ID "local"
 #endif
@@ -18,6 +19,28 @@ static volatile pwl_workspace_report_t workspace_result;
 #define PWL_PROBE_LABEL "PS4WL Memory"
 #endif
 extern unsigned char _start[], __pwl_image_end[];
+static char report_path[96];
+static int report_append(const char *text) {
+  int error=0,status=pwl_probe_log_append(report_path,text,strlen(text),&error);
+  if(status)printf_notification(PWL_PROBE_LABEL ": USB stage=%d errno=%x; stopped",status,error);
+  return status;
+}
+static int report_begin(void) {
+#ifdef PWL_RESIDENT_PROBE
+  const char *name="PS4WL_RESIDENT.LOG";
+#elif defined(PWL_WORKSPACE_PROBE)
+  const char *name="PS4WL_WORKSPACE.LOG";
+#else
+  const char *name="PS4WL_MEMORY.LOG";
+#endif
+  int statuses[2],errors[2];
+  int port=pwl_probe_log_select(name,PS4WL_BUILD_ID,report_path,sizeof(report_path),statuses,errors);
+  if(port>=0){printf_notification(PWL_PROBE_LABEL ": log ready USB%d",port);return 0;}
+  for(unsigned i=0;i<2;i++)
+    printf_notification(PWL_PROBE_LABEL ": USB%u stage=%d errno=%x",i,statuses[i],errors[i]);
+  printf_notification(PWL_PROBE_LABEL ": no writable USB log; test NOT started");
+  return 1;
+}
 typedef unsigned long long vm_u64;
 typedef vm_u64 (*alloc_fn)(void *,vm_u64,int,vm_u64,vm_u64,unsigned long,unsigned long,char);
 typedef void (*free_fn)(void *,vm_u64,vm_u64);
@@ -98,9 +121,17 @@ static int probe(struct thread *td,void *args) {
 int _main(struct thread *unused) {
   UNUSED(unused);initKernel();initLibc();
   printf_notification(PWL_PROBE_LABEL ": entered %s",PS4WL_BUILD_ID);
-  if(get_firmware()!=1352 || !is_jailbroken()) {printf_notification(PWL_PROBE_LABEL ": requires 13.52/HEN");return 1;}
+  if(report_begin())return 1;
+  if(get_firmware()!=1352 || !is_jailbroken()) {
+    report_append("checkpoint=STOP reason=environment_check\n");
+    printf_notification(PWL_PROBE_LABEL ": environment check failed; stopped");return 1;
+  }
   size_t bytes=(size_t)(__pwl_image_end-_start);
-  if(!bytes || mlock(_start,bytes)!=0) {printf_notification(PWL_PROBE_LABEL ": payload lock failed; stopped");return 1;}
+  if(!bytes || mlock(_start,bytes)!=0) {
+    report_append("checkpoint=STOP reason=memory_lock\n");
+    printf_notification(PWL_PROBE_LABEL ": memory lock failed; stopped");return 1;
+  }
+  if(report_append("checkpoint=STARTING_TEST\n")) {munlock(_start,bytes);return 1;}
   printf_notification(PWL_PROBE_LABEL ": experiment starting");
   int rc=kexec(probe,NULL);
   int unlock_rc=munlock(_start,bytes);
@@ -131,21 +162,13 @@ int _main(struct thread *unused) {
     int extra=snprintf(log+n,sizeof(log)-(size_t)n,"resident efi_status=%d mode=PREPARATION_ONLY code_called=0\n",workspace_result.efi_status);
     if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
   }
-  const char *log_path="/mnt/usb0/PS4WL_RESIDENT.LOG";
-#else
-  const char *log_path="/mnt/usb0/PS4WL_WORKSPACE.LOG";
 #endif
-#else
-  const char *log_path="/mnt/usb0/PS4WL_MEMORY.LOG";
 #endif
-  int fd=open(log_path,O_WRONLY|O_CREAT|O_APPEND,0600);
-  if(fd>=0) {
-    int good=n>0 && (size_t)n<sizeof(log);size_t done=0;
-    while(good && done<(size_t)n) {ssize_t w=write(fd,log+done,(size_t)n-done);if(w<=0 || (size_t)w>(size_t)n-done)good=0;else done+=(size_t)w;}
-    if(probe_fsync(fd)!=0)good=0;
-    if(close(fd)!=0)good=0;
-    printf_notification(good?PWL_PROBE_LABEL ": report on USB0":PWL_PROBE_LABEL ": USB report incomplete");
-  } else printf_notification(PWL_PROBE_LABEL ": no USB log; photograph notifications");
+  int log_error=0;
+  int log_status=n>0 && (size_t)n<sizeof(log)?
+    pwl_probe_log_append(report_path,log,(size_t)n,&log_error):PWL_LOG_FORMAT;
+  if(log_status)printf_notification(PWL_PROBE_LABEL ": result log stage=%d errno=%x",log_status,log_error);
+  else printf_notification(PWL_PROBE_LABEL ": report saved %s",report_path);
   if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
-  return rc || unlock_rc || result.error || result.stage!=5;
+  return rc || unlock_rc || result.error || result.stage!=5 || log_status;
 }
