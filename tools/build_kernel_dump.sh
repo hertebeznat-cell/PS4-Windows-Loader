@@ -31,8 +31,19 @@ gcc "$sdk/libPS4/crt0.s" "$out/dumper.o" -nostartfiles -nostdlib -fpie -fPIC \
  -Wl,-T,"$sdk/libPS4/linker.x" -Wl,--build-id=none -Wl,--gc-sections -Wl,-z,noexecstack \
  -L"$sdk/libPS4" -lPS4 -o "$out/PS4WindowsLoader-Kernel-Dump.elf"
 test -z "$(nm -u "$out/PS4WindowsLoader-Kernel-Dump.elf")"
-objcopy --set-section-flags .bss=alloc,load,contents -O binary \
+objcopy --set-section-flags '.bss*=alloc,load,contents' -O binary \
  "$out/PS4WindowsLoader-Kernel-Dump.elf" "$out/PS4WindowsLoader-Kernel-Dump.bin"
+python3 - "$out" <<'PY_CHECK'
+import struct, sys
+from pathlib import Path
+p=Path(sys.argv[1]); e=(p/'PS4WindowsLoader-Kernel-Dump.elf').read_bytes(); b=(p/'PS4WindowsLoader-Kernel-Dump.bin').read_bytes()
+o=struct.unpack_from('<Q',e,40)[0]; sz,n=struct.unpack_from('<HH',e,58)
+for i in range(n):
+    _,typ,flags,addr,off,size=struct.unpack_from('<IIQQQQ',e,o+i*sz)
+    if flags & 2:
+        if addr+size>len(b): raise SystemExit('Raw payload omits allocated section')
+        if typ==8 and b[addr:addr+size]!=bytes(size): raise SystemExit('Raw BSS is not zero-filled')
+PY_CHECK
 rm -f "$out/dumper.o"
 printf '%s\n' "$build_id" > "$out/COMMIT.txt"
 printf '%s\n' b7326416c23ce14639e9180a24093bdc5eedb579 > "$out/SDK_COMMIT.txt"

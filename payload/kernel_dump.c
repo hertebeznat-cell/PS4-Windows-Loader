@@ -10,7 +10,8 @@ SYSCALL(pwl_fsync, 95);
 /* Experimental external SDK callback ABI and copyout; no allocator or CPU switch. */
 int _main(struct thread *td) {
   UNUSED(td);
-  initKernel(); initLibc(); initSysUtil();
+  initKernel(); initLibc();
+  printf_notification("PS4WL Dump: entered, build %s",PS4WL_BUILD_ID);
   if(get_firmware()!=1352 || !is_jailbroken()) { printf_notification("PS4WL Dump: requires 13.52 and active HEN"); return 1; }
   printf_notification("PS4WL Dump: build %s",PS4WL_BUILD_ID);
   uint64_t base=get_kernel_base();

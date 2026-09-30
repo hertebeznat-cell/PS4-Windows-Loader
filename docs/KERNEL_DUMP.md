@@ -15,6 +15,11 @@ This implementation does not call jailbreak(), change credentials/control
 registers, allocate kernel memory or enter Windows. Only the SDK base/dump
 callbacks are used; their base-copy error propagation is repaired at build time.
 
+Raw payload packaging includes every `.bss.*` section as zero-filled bytes.
+The build checks that the binary covers all allocated sections. An entry
+notification precedes firmware detection; SysUtil module loading is unnecessary
+for the kernel notification API and is omitted.
+
 ## What changed from the upstream dumper
 
 - Reject unsupported firmware, absent HEN, invalid base, failed mapping/open.
