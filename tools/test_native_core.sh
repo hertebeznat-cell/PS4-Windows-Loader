@@ -6,6 +6,10 @@ sanitizers=${1:-address,undefined}
 mkdir -p build
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+    loader/src/efi_tables.c tests/test_efi_tables.c -o build/test-efi-tables
+./build/test-efi-tables
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/ps4_binding.c loader/src/ps4_memory.c tests/test_ps4_binding.c \
     -o build/test-ps4-binding
 ./build/test-ps4-binding

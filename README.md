@@ -190,6 +190,12 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iloader/include \
 
 ## Next milestones
 
+The [resident EFI table preparation](docs/EFI_TABLE_PREPARATION.md) module now
+builds and checks AMD64 table layouts, nine supplied callback addresses and
+CRC32s, including destinations above 4 GiB. This is host-tested preparation;
+the resident callback code and workspace integration are still to be built.
+It does not introduce a new console test or a Windows launcher.
+
 1. Replace the user-process execution path with a platform-owned boot context
    capable of executing privileged CPU instructions; review the shutdown before
    resuming entry tests. See [Execution boundary](docs/EXECUTION_BOUNDARY.md).
