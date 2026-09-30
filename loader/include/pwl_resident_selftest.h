@@ -5,7 +5,7 @@ typedef struct pwl_resident_call_report {
     uint32_t passed_mask, last_call;
     uint64_t exit_status;
 } pwl_resident_call_report_t;
-/* Process-context diagnostic only. Uses synthetic memory descriptors and never
+/* Returning diagnostic for a prepared, resident execution context. Uses synthetic memory descriptors and never
  * accesses returned page addresses. code must be an audited executable copy,
  * with its binding slot pointing to data in this same address context.
  * checkpoint is called before each entry; a failure stops further calls.

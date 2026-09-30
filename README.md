@@ -267,3 +267,13 @@ absence of `PS4WL_TRANSITION.LOG` despite successful write notifications. It
 checks filesystem device boundaries and reopens/compares a short `PWL.LOG`
 record. It does not execute a CPU transition or allocate kernel memory.
 The physical USB persistence issue remains unresolved until the file is retrieved.
+
+
+The [returning root EFI integration](docs/ROOT_EFI.md) is the next untested
+console variant. It executes all nine copied resident EFI callbacks under an
+identical copy of the active root with the temporary stack and restores the
+original context. Its memory descriptors remain synthetic; Microsoft code is
+not entered. FAT32 reporting uses `PWL_EFI.TXT`, selected by exact USB marker
+identity, with file/directory synchronization and readback. Windows label
+`WINDOWS` is recorded as the user-supplied label, not independently verified.
+Internal file checks do not establish post-removal persistence.

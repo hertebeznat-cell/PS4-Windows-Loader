@@ -4,14 +4,58 @@
 int probe_fsync(int fd);
 SYSCALL(probe_fsync,95);
 #include "probe_log.h"
+#ifdef PWL_ROOT_EFI_PROBE
+#include "verified_usb_log.h"
+#endif
 #ifndef PS4WL_BUILD_ID
 #define PS4WL_BUILD_ID "local"
 #endif
 #ifdef PWL_ROOT_CLONE_PROBE
 #include "root_clone_report.h"
+#ifndef PWL_ROOT_EFI_PROBE
 #include "raw_journal.h"
+#endif
 static volatile pwl_root_clone_report_t root_result;
+#ifdef PWL_ROOT_EFI_PROBE
+#include "pwl_resident_selftest.h"
+#include "resident_fixture.h"
+
+#define PWL_PROBE_LABEL "PS4WL Root EFI"
+#define PWL_RETURN_MODE "IDENTICAL_ROOT_EFI"
+static pwl_resident_data_t root_efi_data;
+static pwl_resident_call_report_t root_efi_report;
+static pwl_resident_image_t root_efi_image;
+static void *root_efi_code;
+static size_t root_efi_bytes;
+static uint64_t root_efi_observed;
+int pwl_root_efi_callback(void *context) {
+  volatile uint64_t marker=0;
+  const volatile pwl_root_clone_report_t *r=context;
+  root_efi_observed=(uint64_t)(uintptr_t)&marker;
+  if(root_efi_observed<r->kva+16384 || root_efi_observed>=r->kva+32768)
+    return PWL_ERR_INVALID_ARGUMENT;
+  return pwl_resident_calls_test(&root_efi_image,root_efi_code,&root_efi_data,
+      &root_efi_report,NULL,NULL);
+}
+static int prepare_root_efi(void) {
+  root_efi_image=resident_fixture();
+  if(pwl_resident_image_validate(&root_efi_image)!=PWL_OK)return 1;
+  root_efi_bytes=(root_efi_image.size+16383U)&~(size_t)16383U;
+  root_efi_code=mmap(NULL,root_efi_bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+  if(root_efi_code==(void *)-1){root_efi_code=NULL;return 1;}
+  unsigned char *code=root_efi_code;
+  for(size_t i=0;i<root_efi_image.size;i++)code[i]=((const unsigned char *)root_efi_image.bytes)[i];
+  uint64_t binding=(uint64_t)(uintptr_t)&root_efi_data;
+  for(unsigned i=0;i<8;i++)code[root_efi_image.binding_offset+i]=(unsigned char)(binding>>(8*i));
+  if(mprotect(code,root_efi_bytes,PROT_READ|PROT_EXEC)!=0 || mlock(code,root_efi_bytes)!=0) {
+    munmap(code,root_efi_bytes);root_efi_code=NULL;return 1;
+  }
+  return 0;
+}
+#else
 #define PWL_PROBE_LABEL "PS4WL Root Clone"
+#define PWL_RETURN_MODE "IDENTICAL_ROOT_CLONE"
+#endif
 #elif defined(PWL_WORKSPACE_PROBE)
 #include "workspace_report.h"
 static volatile pwl_workspace_report_t workspace_result;
@@ -32,7 +76,12 @@ static int report_optional_status(int status) { (void)status; return 0; }
 static int report_optional_status(int status) { return status; }
 #endif
 static int report_append(const char *text) {
-  int error=0,status=pwl_probe_log_append(report_path,text,strlen(text),&error);
+  int error=0;
+#ifdef PWL_ROOT_EFI_PROBE
+  int status=pwl_verified_usb_append(report_path,text,strlen(text),&error);
+#else
+  int status=pwl_probe_log_append(report_path,text,strlen(text),&error);
+#endif
   if(status)printf_notification(PWL_PROBE_LABEL ": USB stage=%d errno=%x",status,error);
   return report_optional_status(status);
 }
@@ -47,7 +96,12 @@ static int report_begin(void) {
   const char *name="PS4WL_MEMORY.LOG";
 #endif
   int statuses[2],errors[2];
+#ifdef PWL_ROOT_EFI_PROBE
+  UNUSED(name);
+  int port=pwl_verified_usb_begin(PS4WL_BUILD_ID,report_path,sizeof(report_path),statuses,errors);
+#else
   int port=pwl_probe_log_select(name,PS4WL_BUILD_ID,report_path,sizeof(report_path),statuses,errors);
+#endif
   if(port>=0){printf_notification(PWL_PROBE_LABEL ": log ready USB%d",port);return 0;}
   for(unsigned i=0;i<2;i++)
     printf_notification(PWL_PROBE_LABEL ": USB%u stage=%d errno=%x",i,statuses[i],errors[i]);
@@ -152,11 +206,18 @@ static __attribute__((noinline)) int run_test(void) {
     report_append("checkpoint=STOP reason=environment_check\n");
     printf_notification(PWL_PROBE_LABEL ": environment check failed; stopped");return 1;
   }
-  size_t bytes=(size_t)(__pwl_image_end-_start);
+  uintptr_t image_start,image_end;
+  __asm__ volatile("lea %0, _start[rip]; lea %1, __pwl_image_end[rip]":"=r"(image_start),"=r"(image_end));
+  size_t bytes=(size_t)(image_end-image_start);
   if(!bytes || mlock(_start,bytes)!=0) {
     report_append("checkpoint=STOP reason=memory_lock\n");
     printf_notification(PWL_PROBE_LABEL ": memory lock failed; stopped");return 1;
   }
+#ifdef PWL_ROOT_EFI_PROBE
+  if(prepare_root_efi()) {
+    munlock(_start,bytes);report_append("checkpoint=STOP reason=resident_preparation\n");return 1;
+  }
+#endif
   if(report_append("checkpoint=STARTING_TEST\n")) {munlock(_start,bytes);return 1;}
   printf_notification(PWL_PROBE_LABEL ": experiment starting");
   int rc=kexec(probe,NULL);
@@ -188,7 +249,12 @@ static __attribute__((noinline)) int run_test(void) {
   printf_notification(PWL_PROBE_LABEL ": EFI=%d; code not called",workspace_result.efi_status);
 #endif
 #endif
-  char log[1024];
+#ifdef PWL_ROOT_EFI_PROBE
+  int code_unlock=munlock(root_efi_code,root_efi_bytes);
+  int code_release=munmap(root_efi_code,root_efi_bytes);
+  printf_notification(PWL_PROBE_LABEL ": EFI passed=%x last=%u code_release=%d",root_efi_report.passed_mask,root_efi_report.last_call,code_release);
+#endif
+  char log[1536];
   int n=snprintf(log,sizeof(log),"build=%s rc=%d stage=%u error=%u critical=%u locks=%u cs=%x flags=%llx base=%llx kva=%llx pa=%llx unlock_rc=%d\n",
     PS4WL_BUILD_ID,rc,result.stage,result.error,result.critical,result.locks,result.cs,
     (unsigned long long)result.flags,(unsigned long long)result.base,
@@ -210,7 +276,7 @@ static __attribute__((noinline)) int run_test(void) {
 #ifdef PWL_ROOT_CLONE_PROBE
   if(n>0 && (size_t)n<sizeof(log)) {
     int extra=snprintf(log+n,sizeof(log)-(size_t)n,
-      "transition status=%d error=%u switched=%u restored=%u released=%u cr0=%llx cr3=%llx cr4=%llx efer=%llx source=%llx source_pa=%llx root_before=%llx root_entered=%llx root_after=%llx stack_before=%llx stack_entered=%llx stack_after=%llx kernel_source=%llx kernel_pa=%llx direct=%llx indices=%u/%u mode=IDENTICAL_ROOT_CLONE windows_called=0\n",
+      "transition status=%d error=%u switched=%u restored=%u released=%u cr0=%llx cr3=%llx cr4=%llx efer=%llx source=%llx source_pa=%llx root_before=%llx root_entered=%llx root_after=%llx stack_before=%llx stack_entered=%llx stack_after=%llx kernel_source=%llx kernel_pa=%llx direct=%llx indices=%u/%u mode=" PWL_RETURN_MODE " windows_called=0\n",
       root_result.transition_status,root_result.error,root_result.switched,root_result.restored,root_result.released,
       (unsigned long long)root_result.cr0,(unsigned long long)root_result.cr3,
       (unsigned long long)root_result.cr4,(unsigned long long)root_result.efer,
@@ -223,16 +289,32 @@ static __attribute__((noinline)) int run_test(void) {
     if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
   }
 #endif
+#ifdef PWL_ROOT_EFI_PROBE
+  if(n>0 && (size_t)n<sizeof(log)) {
+    int extra=snprintf(log+n,sizeof(log)-(size_t)n,
+      "efi passed_mask=%x last_call=%u exit_status=%llx observed=%llx code_unlock=%d code_release=%d mode=IDENTICAL_ROOT_EFI synthetic_map=1 windows_called=0\n",
+      root_efi_report.passed_mask,root_efi_report.last_call,(unsigned long long)root_efi_report.exit_status,
+      (unsigned long long)root_efi_observed,code_unlock,code_release);
+    if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
+  }
+#endif
   int log_error=0;
   int log_status=n>0 && (size_t)n<sizeof(log)?
+    #ifdef PWL_ROOT_EFI_PROBE
+    pwl_verified_usb_append(report_path,log,(size_t)n,&log_error):PWL_LOG_FORMAT;
+#else
     pwl_probe_log_append(report_path,log,(size_t)n,&log_error):PWL_LOG_FORMAT;
+#endif
   if(log_status)printf_notification(PWL_PROBE_LABEL ": result log stage=%d errno=%x",log_status,log_error);
   else printf_notification(PWL_PROBE_LABEL ": report saved %s",report_path);
   if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
+#ifdef PWL_ROOT_EFI_PROBE
+  if(code_unlock || code_release || root_efi_report.passed_mask!=0x1ff || root_efi_report.last_call!=9)return 1;
+#endif
   return rc || unlock_rc || result.error || result.stage!=5 || report_optional_status(log_status);
 }
 
-#ifdef PWL_ROOT_CLONE_PROBE
+#if defined(PWL_ROOT_CLONE_PROBE) && !defined(PWL_ROOT_EFI_PROBE)
 static __attribute__((noinline)) void raw_journal_failure(int s0,long e0,int s1,long e1) {
  printf_notification(PWL_PROBE_LABEL ": early USB0 stage=%d errno=%lld; notifications continue",s0,-e0);
  printf_notification(PWL_PROBE_LABEL ": early USB1 stage=%d errno=%lld; notifications continue",s1,-e1);
@@ -240,7 +322,7 @@ static __attribute__((noinline)) void raw_journal_failure(int s0,long e0,int s1,
 #endif
 int _main(struct thread *unused) {
   UNUSED(unused);
-#ifdef PWL_ROOT_CLONE_PROBE
+#if defined(PWL_ROOT_CLONE_PROBE) && !defined(PWL_ROOT_EFI_PROBE)
   static const char paths[2][40]={"/mnt/usb0/PS4WL_TRANSITION.LOG","/mnt/usb1/PS4WL_TRANSITION.LOG"};
   static const char entered[]="build=" PS4WL_BUILD_ID " checkpoint=RAW_ENTERED mode=DIRECT_USB_JOURNAL\n";
   static const char kernel_ready[]="checkpoint=KERNEL_LIBRARY_READY\n";

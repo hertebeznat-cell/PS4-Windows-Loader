@@ -46,10 +46,22 @@ int pwl_root_clone_experiment(void *map,void *pmap,uint32_t dm_pml4,uint32_t dm_
   }
  if (pwl_x64_root_clone_prepare(&cpu,(const volatile uint64_t *)(uintptr_t)source,
      (uint64_t *)(uintptr_t)kva)!=PWL_OK) {r->error=8;goto cleanup;}
+#ifdef PWL_ROOT_EFI_PROBE
+ if (cpu.cr4 & ((UINT64_C(1)<<20)|(UINT64_C(1)<<21))) {
+  r->error=12;goto cleanup;
+ }
+#endif
  r->stage=3;
  pwl_address_call_report_t report={0};
+#ifdef PWL_ROOT_EFI_PROBE
+ extern int pwl_root_efi_callback(void *);
+ pwl_root_efi_call_t call={cpu.cr3,pwl_root_efi_callback,(void *)r};
+ r->transition_status=pwl_x64_root_efi_call(pa,kva+32768,&report,
+     (const volatile uint64_t *)(uintptr_t)source,(const uint64_t *)(uintptr_t)kva,&call);
+#else
  r->transition_status=pwl_x64_root_clone_call(pa,kva+32768,&report,
      (const volatile uint64_t *)(uintptr_t)source,(const uint64_t *)(uintptr_t)kva,cpu.cr3);
+#endif
  r->root_before=report.root_before;r->root_entered=report.root_entered;r->root_after=report.root_after;
  r->stack_before=report.stack_before;r->stack_entered=report.stack_entered;r->stack_after=report.stack_after;
  r->switched=report.root_entered==pa;
