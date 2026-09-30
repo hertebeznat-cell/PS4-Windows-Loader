@@ -25,10 +25,16 @@ static volatile pwl_workspace_report_t workspace_result;
 #endif
 extern unsigned char _start[], __pwl_image_end[];
 static char report_path[96];
+#ifdef PWL_ROOT_CLONE_PROBE
+/* Root diagnostics remain usable when removable storage is unavailable. */
+static int report_optional_status(int status) { (void)status; return 0; }
+#else
+static int report_optional_status(int status) { return status; }
+#endif
 static int report_append(const char *text) {
   int error=0,status=pwl_probe_log_append(report_path,text,strlen(text),&error);
-  if(status)printf_notification(PWL_PROBE_LABEL ": USB stage=%d errno=%x; stopped",status,error);
-  return status;
+  if(status)printf_notification(PWL_PROBE_LABEL ": USB stage=%d errno=%x",status,error);
+  return report_optional_status(status);
 }
 static int report_begin(void) {
 #ifdef PWL_ROOT_CLONE_PROBE
@@ -45,8 +51,12 @@ static int report_begin(void) {
   if(port>=0){printf_notification(PWL_PROBE_LABEL ": log ready USB%d",port);return 0;}
   for(unsigned i=0;i<2;i++)
     printf_notification(PWL_PROBE_LABEL ": USB%u stage=%d errno=%x",i,statuses[i],errors[i]);
+  #ifdef PWL_ROOT_CLONE_PROBE
+  printf_notification(PWL_PROBE_LABEL ": USB log unavailable; results in notifications");
+#else
   printf_notification(PWL_PROBE_LABEL ": no writable USB log; test NOT started");
-  return 1;
+#endif
+  return report_optional_status(1);
 }
 typedef unsigned long long vm_u64;
 typedef vm_u64 (*alloc_fn)(void *,vm_u64,int,vm_u64,vm_u64,unsigned long,unsigned long,char);
@@ -149,6 +159,20 @@ static __attribute__((noinline)) int run_test(void) {
   printf_notification(PWL_PROBE_LABEL ": returned rc=%d stage=%u error=%u",rc,result.stage,result.error);
   printf_notification(PWL_PROBE_LABEL ": critical=%u locks=%u flags=%llx",result.critical,result.locks,(unsigned long long)result.flags);
   printf_notification(PWL_PROBE_LABEL ": KVA=%llx PA=%llx",(unsigned long long)result.kva,(unsigned long long)result.pa);
+#ifdef PWL_ROOT_CLONE_PROBE
+  printf_notification(PWL_PROBE_LABEL ": active root=%llx source=%llx source PA=%llx",
+    (unsigned long long)root_result.cr3,(unsigned long long)root_result.source,
+    (unsigned long long)root_result.source_pa);
+  printf_notification(PWL_PROBE_LABEL ": CR0=%llx CR4=%llx EFER=%llx",
+    (unsigned long long)root_result.cr0,(unsigned long long)root_result.cr4,
+    (unsigned long long)root_result.efer);
+  printf_notification(PWL_PROBE_LABEL ": status=%d switched=%u restored=%u released=%u",
+    root_result.transition_status,root_result.switched,root_result.restored,root_result.released);
+  printf_notification(PWL_PROBE_LABEL ": roots=%llx/%llx/%llx stacks=%llx/%llx/%llx",
+    (unsigned long long)root_result.root_before,(unsigned long long)root_result.root_entered,
+    (unsigned long long)root_result.root_after,(unsigned long long)root_result.stack_before,
+    (unsigned long long)root_result.stack_entered,(unsigned long long)root_result.stack_after);
+#endif
 #ifdef PWL_WORKSPACE_PROBE
   printf_notification(PWL_PROBE_LABEL ": prep=%d tables=%d release=%d",workspace_result.prepare_status,workspace_result.table_status,workspace_result.release_status);
   printf_notification(PWL_PROBE_LABEL ": bytes=%llu tables=%u copies=%u",workspace_result.bytes,workspace_result.tables,workspace_result.copy_ok);
@@ -195,13 +219,13 @@ static __attribute__((noinline)) int run_test(void) {
   if(log_status)printf_notification(PWL_PROBE_LABEL ": result log stage=%d errno=%x",log_status,log_error);
   else printf_notification(PWL_PROBE_LABEL ": report saved %s",report_path);
   if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
-  return rc || unlock_rc || result.error || result.stage!=5 || log_status;
+  return rc || unlock_rc || result.error || result.stage!=5 || report_optional_status(log_status);
 }
 
 #ifdef PWL_ROOT_CLONE_PROBE
 static __attribute__((noinline)) void raw_journal_failure(int s0,long e0,int s1,long e1) {
- printf_notification(PWL_PROBE_LABEL ": early USB0 stage=%d errno=%lld; stopped",s0,-e0);
- printf_notification(PWL_PROBE_LABEL ": early USB1 stage=%d errno=%lld; stopped",s1,-e1);
+ printf_notification(PWL_PROBE_LABEL ": early USB0 stage=%d errno=%lld; notifications continue",s0,-e0);
+ printf_notification(PWL_PROBE_LABEL ": early USB1 stage=%d errno=%lld; notifications continue",s1,-e1);
 }
 #endif
 int _main(struct thread *unused) {
@@ -219,15 +243,16 @@ int _main(struct thread *unused) {
   initKernel();
   if(selected>=0) {
     long error;
-    if(pwl_raw_journal_append(paths[selected],kernel_ready,sizeof(kernel_ready)-1,&error))return 1;
+    (void)pwl_raw_journal_append(paths[selected],kernel_ready,sizeof(kernel_ready)-1,&error);
   }
   initLibc();
   if(selected<0) {
     raw_journal_failure(statuses[0],errors[0],statuses[1],errors[1]);
-    return 1;
   }
-  long error;
-  if(pwl_raw_journal_append(paths[selected],libc_ready,sizeof(libc_ready)-1,&error))return 1;
+  if(selected>=0) {
+    long error;
+    (void)pwl_raw_journal_append(paths[selected],libc_ready,sizeof(libc_ready)-1,&error);
+  }
 #else
   initKernel();initLibc();
 #endif

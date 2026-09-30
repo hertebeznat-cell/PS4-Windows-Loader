@@ -34,28 +34,39 @@ crash. Do not repeat a hung run.
 ## Single console invocation
 
 - Connect the dedicated USB and send `PS4WindowsLoader-Root-Clone.bin` once.
-- Return `PS4WL_TRANSITION.LOG`.
+- Return notification photos with the active root, source PA, CPU state and
+  transition results. `PS4WL_TRANSITION.LOG` is optional.
 - Expected successful return: `rc=0 stage=5 error=0`, then `status=0 error=0
   switched=1 restored=1 released=1 mode=IDENTICAL_ROOT_CLONE windows_called=0`.
 - If the candidate does not match live CR3: `transition error=3 switched=0`.
-  This is an intentional refusal before allocation/switching. Send the log;
-  do not repeat or substitute an address.
+  This is an intentional refusal before allocation/switching. Return the notifications; do not repeat or substitute an address.
 
 The root-clone build now aligns its entry stack explicitly and writes
 `RAW_ENTERED` through direct open/write/fsync/close system calls, before SDK
 initialization, formatting and notifications. The small entry function keeps
 large notification/result frames out of this first stage. It handles partial
 writes and EINTR without libc errno and records `KERNEL_LIBRARY_READY` and
-`LIBC_READY` separately. A USB failure stops the experiment. The source root
+`LIBC_READY` separately. USB journal failures no longer stop this diagnostic; notifications carry the
+CPU state, source translation and root/stack round-trip results. The source root
 and switching logic are unchanged by this journal fix. Absence of the previous
 log alone does not establish which startup operation failed.
 
-A durable USB STARTING_TEST checkpoint is saved before the kernel callback;
+A USB STARTING_TEST checkpoint is attempted before the kernel callback;
 no USB calls are possible while inside the bounded transition. If it hangs,
-the last persistent checkpoint will therefore be STARTING_TEST. Successful
+a successfully persisted checkpoint can be STARTING_TEST. Persistence has
+not been established on the user's removable drive. Successful
 return logs both root and stack addresses and releases the original owner.
 Invalid returned ownership is retained rather than freeing a guessed address.
 
 Passing proves only that an identical-map root switch and stack round trip
 returned. It does not prove exception recovery after a fault, a full OS
 handoff, independent EFI mappings or Windows readiness.
+
+## Evidence from the console
+
+The previous console invocation returned `rc=0 stage=2 error=23`, with
+`KVA=0 PA=0`. This is the source-translation mismatch refusal before
+allocation and root switching, not a successful switch. Earlier workspace,
+resident callback and process-stack checks remain valid for their tested
+scopes. The mismatch gate remains mandatory; notifications now expose the
+addresses needed to assess the refusal without a removable-drive log.
