@@ -42,6 +42,11 @@ grep -q 'Host memory fixtures must never' build/host-binding-rejection.txt
 ./build/test-firmware
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+    loader/src/handoff.c loader/src/firmware_memory.c tests/test_pool.c \
+    -o build/test-pool
+./build/test-pool
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/main.c loader/src/pe_loader.c tests/test_pe_loader.c \
     -o build/test-pe-loader
 ./build/test-pe-loader

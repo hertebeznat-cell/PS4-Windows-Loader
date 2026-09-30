@@ -41,6 +41,8 @@ typedef uint64_t (EFI *exit_fn)(uint64_t,uint64_t);
 typedef uint64_t (EFI *crc_fn)(const void *,size_t,uint32_t *);
 typedef void (EFI *copy_fn)(void *,const void *,size_t);
 typedef void (EFI *set_fn)(void *,size_t,unsigned char);
+typedef uint64_t (EFI *pool_alloc_fn)(unsigned,size_t,void **);
+typedef uint64_t (EFI *pool_free_fn)(void *);
 /* POSIX executable mappings permit conversion through memcpy without a C
  * object-pointer/function-pointer cast. Each callback uses the actual ms ABI.
  */
@@ -64,6 +66,7 @@ static void run_copy(void)
     LOAD(raise_fn,raise_tpl,0); LOAD(restore_fn,restore_tpl,1);
     LOAD(alloc_fn,allocate,2); LOAD(free_fn,release,3); LOAD(map_fn,map,4);
     LOAD(exit_fn,exit_boot,5); LOAD(crc_fn,crc,6); LOAD(copy_fn,copy,7); LOAD(set_fn,set,8);
+    LOAD(pool_alloc_fn,pool_alloc,9); LOAD(pool_free_fn,pool_free,10);
     assert(raise_tpl(16)==4 && d.tpl==16);
     restore_tpl(4);assert(d.tpl==4);
     assert(raise_tpl(7)==4 && d.tpl==4);
@@ -79,6 +82,15 @@ static void run_copy(void)
     assert(exit_boot(0x1234,key)==PWL_EFI_UNSUPPORTED && !d.memory.exited);
     assert(release(pa,2)==0);
     assert(release(pa,2)==PWL_EFI_NOT_FOUND);
+    void *pool=NULL;
+    uint64_t old_key=d.memory.key;
+    assert(pool_alloc(2,4097,&pool)==0 && (uintptr_t)pool==region.base);
+    assert(d.memory.key!=old_key && ((uintptr_t)pool&7)==0);
+    assert(release((uintptr_t)pool,1)==PWL_EFI_INVALID_PARAMETER);
+    assert(pool_free((unsigned char *)pool+8)==PWL_EFI_INVALID_PARAMETER);
+    assert(pool_free(pool)==0 && pool_free(pool)==PWL_EFI_INVALID_PARAMETER);
+    assert(pool_alloc(2,0,&pool)==0 && pool_free(pool)==0);
+    assert(pool_alloc(2,1,NULL)==PWL_EFI_INVALID_PARAMETER);
     uint32_t result=0;
     assert(crc("123456789",9,&result)==0 && result==UINT32_C(0xcbf43926));
     assert(crc(NULL,9,&result)==PWL_EFI_INVALID_PARAMETER);

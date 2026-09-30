@@ -9,6 +9,7 @@
  * Calls must be serialized; a future EFI/TPL layer must prevent reentrancy.
  */
 #define PWL_FW_MAX_DESCRIPTORS 256U
+#define PWL_FW_MAX_POOLS 128U
 #define PWL_EFI_ERROR(n) ((UINT64_C(1) << 63) | (n))
 #define PWL_EFI_SUCCESS UINT64_C(0)
 #define PWL_EFI_INVALID_PARAMETER PWL_EFI_ERROR(2)
@@ -35,6 +36,8 @@ typedef struct pwl_fw_memory {
     uint64_t issued_key;
     uint64_t image_handle;
     unsigned exited;
+    /* Page-backed pools: metadata stays outside application-writable buffers. */
+    struct { uint64_t address, pages; } pools[PWL_FW_MAX_POOLS];
 } pwl_fw_memory_t;
 
 /* Input must be an actual platform inventory with owned free extents only.
@@ -49,6 +52,9 @@ uint64_t pwl_fw_allocate_pages(pwl_fw_memory_t *memory, unsigned allocation_type
                                unsigned memory_type, uint64_t pages,
                                uint64_t *address);
 uint64_t pwl_fw_free_pages(pwl_fw_memory_t *memory, uint64_t address, uint64_t pages);
+uint64_t pwl_fw_allocate_pool(pwl_fw_memory_t *memory, unsigned memory_type,
+                              size_t bytes, uint64_t *address);
+uint64_t pwl_fw_free_pool(pwl_fw_memory_t *memory, uint64_t address);
 uint64_t pwl_fw_get_memory_map(pwl_fw_memory_t *memory, size_t *size,
                               pwl_efi_memory_descriptor_t *map, uint64_t *key,
                               size_t *descriptor_size, uint32_t *version);

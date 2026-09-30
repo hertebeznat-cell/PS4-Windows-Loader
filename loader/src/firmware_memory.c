@@ -38,7 +38,51 @@ pwl_status_t pwl_fw_memory_init(pwl_fw_memory_t *m,
     m->issued_key = 0;
     m->image_handle = image_handle;
     m->exited = 0;
+    for (i=0;i<PWL_FW_MAX_POOLS;i++) {
+        m->pools[i].address=0;
+        m->pools[i].pages=0;
+    }
     return PWL_OK;
+}
+
+uint64_t pwl_fw_allocate_pool(pwl_fw_memory_t *m,unsigned type,size_t bytes,uint64_t *out)
+{
+    if (!out || !m || !m->count || !m->key)
+        return PWL_EFI_INVALID_PARAMETER;
+    if (m->exited) return PWL_EFI_ACCESS_DENIED;
+    /* Zero bytes still has a unique freeable allocation. No hidden header. */
+    uint64_t pages=bytes/PWL_PAGE_SIZE+(bytes%PWL_PAGE_SIZE!=0);
+    if (!pages) pages=1;
+    if (pages>UINT64_MAX/PWL_PAGE_SIZE) return PWL_EFI_OUT_OF_RESOURCES;
+    size_t slot;
+    for (slot=0;slot<PWL_FW_MAX_POOLS;slot++)
+        if (!m->pools[slot].address) break;
+    if (slot==PWL_FW_MAX_POOLS) return PWL_EFI_OUT_OF_RESOURCES;
+    uint64_t address=0;
+    uint64_t status=pwl_fw_allocate_pages(m,PWL_ALLOCATE_ANY,type,pages,&address);
+    if (status!=PWL_EFI_SUCCESS) return status;
+    m->pools[slot].address=address;
+    m->pools[slot].pages=pages;
+    *out=address;
+    return PWL_EFI_SUCCESS;
+}
+
+uint64_t pwl_fw_free_pool(pwl_fw_memory_t *m,uint64_t address)
+{
+    if (!m || !address || !m->count || !m->key) return PWL_EFI_INVALID_PARAMETER;
+    if (m->exited) return PWL_EFI_ACCESS_DENIED;
+    for (size_t i=0;i<PWL_FW_MAX_POOLS;i++) {
+        if (m->pools[i].address!=address) continue;
+        uint64_t pages=m->pools[i].pages;
+        m->pools[i].address=0;
+        uint64_t status=pwl_fw_free_pages(m,address,pages);
+        if (status==PWL_EFI_SUCCESS) {
+            m->pools[i].address=0;
+            m->pools[i].pages=0;
+        } else m->pools[i].address=address;
+        return status;
+    }
+    return PWL_EFI_INVALID_PARAMETER;
 }
 
 static void coalesce(pwl_fw_memory_t *m)
@@ -149,6 +193,11 @@ uint64_t pwl_fw_free_pages(pwl_fw_memory_t *m, uint64_t address, uint64_t pages)
         pages > (UINT64_MAX - address) / PWL_PAGE_SIZE)
         return PWL_EFI_INVALID_PARAMETER;
     bytes = pages * PWL_PAGE_SIZE;
+    for (i=0;i<PWL_FW_MAX_POOLS;i++) {
+        uint64_t pool=m->pools[i].address;
+        if (pool && address<pool+m->pools[i].pages*PWL_PAGE_SIZE &&
+            pool<address+bytes) return PWL_EFI_INVALID_PARAMETER;
+    }
     for (i = 0; i < m->count; ++i) {
         pwl_fw_memory_entry_t *e = &m->entries[i];
         if (e->allocated && address >= e->descriptor.physical_start &&

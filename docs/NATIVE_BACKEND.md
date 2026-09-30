@@ -179,3 +179,30 @@ results are separate from GitHub Actions and from hardware validation.
 Relevant specifications:
 [UEFI Boot Services](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html),
 [FreeBSD 9 contiguous allocation implementation](https://github.com/freebsd/freebsd-src/blob/stable/9/sys/vm/vm_contig.c).
+
+
+## Resident pool allocation
+
+The resident service image now publishes AllocatePool and FreePool in Boot
+Services slots 5 and 6. The original nine callback offsets retain their order;
+the two new offsets are appended to the generated manifest. Historical nine-call
+PS4 reports remain historical evidence and do not certify the new callbacks.
+
+Each pool owns one or more 4 KiB pages from the existing owned heap. Pool records
+are inline in firmware data, not in a header that an EFI application can modify.
+Buffers are page aligned (thus also eight-byte aligned). Zero-byte requests
+receive one freeable page. The initial implementation supports loader and boot
+services memory types 1–4 and at most 128 simultaneous pools; it favors simple
+ownership over sub-page packing. Unsupported memory lifetimes remain refused.
+
+FreePool requires the exact recorded address. FreePages rejects ranges touching
+live pools. Allocation/free changes the memory map key through the existing
+transactional page manager; failed operations preserve the output and owner.
+The services require serialized calls and do not call the console's allocator.
+The nine-call diagnostic remains unchanged; automated host checks separately
+exercise both new copied Microsoft-ABI callbacks and exhaustion, overflow,
+coalescing, foreign/double-free and retired-map behavior.
+
+Reference: [UEFI Boot Services, memory allocation](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html).
+This adds callable memory services, not complete Boot Manager firmware or a
+console entry path.

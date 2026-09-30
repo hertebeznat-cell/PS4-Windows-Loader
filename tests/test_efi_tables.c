@@ -6,7 +6,7 @@
 int main(void)
 {
     pwl_efi_table_spec_t s = {UINT64_C(0x27a300000),4096,
-                              UINT64_C(0x27a301000),4096,{0,16,32,48,64,80,96,112,128}};
+                              UINT64_C(0x27a301000),4096,{0,16,32,48,64,80,96,112,128,144,160}};
     pwl_efi_prepared_tables_t t, good;
     assert(pwl_efi_crc32("123456789",9) == UINT32_C(0xcbf43926));
     assert(pwl_efi_crc32(NULL,0) == 0);
@@ -15,6 +15,8 @@ int main(void)
     assert(t.system.boot_services == s.data_pa+120);
     assert(t.boot.functions[26] == s.code_pa+80);
     assert(t.boot.functions[40] == s.code_pa+96);
+    assert(t.boot.functions[5] == s.code_pa+144);
+    assert(t.boot.functions[6] == s.code_pa+160);
     assert(pwl_efi_tables_validate(&s,&t) == PWL_OK);
     /* Every byte, including padding, absent services and CRC, is checked. */
     for (size_t i=0;i<sizeof(t);++i) {

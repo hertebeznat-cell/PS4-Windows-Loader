@@ -36,6 +36,20 @@ uint64_t EFI pwl_resident_free_pages(uint64_t pa,uint64_t pages)
     pwl_resident_data_t *d=state();
     return pwl_fw_free_pages(d ? &d->memory : NULL,pa,pages);
 }
+uint64_t EFI pwl_resident_allocate_pool(unsigned type,size_t bytes,void **buffer)
+{
+    if (!buffer) return PWL_EFI_INVALID_PARAMETER;
+    pwl_resident_data_t *d=state();
+    uint64_t address=0;
+    uint64_t status=pwl_fw_allocate_pool(d ? &d->memory : NULL,type,bytes,&address);
+    if (status==PWL_EFI_SUCCESS) *buffer=(void *)(uintptr_t)address;
+    return status;
+}
+uint64_t EFI pwl_resident_free_pool(void *buffer)
+{
+    pwl_resident_data_t *d=state();
+    return pwl_fw_free_pool(d ? &d->memory : NULL,(uint64_t)(uintptr_t)buffer);
+}
 uint64_t EFI pwl_resident_get_memory_map(size_t *size,pwl_efi_memory_descriptor_t *map,
                                        uint64_t *key,size_t *ds,uint32_t *version)
 {

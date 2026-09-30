@@ -32,7 +32,8 @@ dis = (p/'DISASSEMBLY.txt').read_text()
 if re.search(r'\b(syscall|sysenter|cli|sti|hlt|rdmsr|wrmsr)\b|%cr[0-9]', dis):
     raise SystemExit('Unexpected CPU/process instruction')
 names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
-         'get_memory_map', 'exit_boot_services', 'calculate_crc32', 'copy_mem', 'set_mem']
+         'get_memory_map', 'exit_boot_services', 'calculate_crc32', 'copy_mem', 'set_mem',
+         'allocate_pool', 'free_pool']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()
@@ -55,4 +56,4 @@ metadata = dict(size=len(blob), binding_offset=binding, callbacks=callbacks,
     f'r.binding_offset={binding}; r.crc32={metadata["crc32"]}U;\n'+
     ''.join(f'r.callbacks[{i}]={address};\n' for i,address in enumerate(callbacks))+
     'return r; }\n')
-print(f'Resident image: {len(blob)} bytes, nine linked callbacks, no imports or relocations')
+print(f'Resident image: {len(blob)} bytes, {len(callbacks)} linked callbacks, no imports or relocations')
