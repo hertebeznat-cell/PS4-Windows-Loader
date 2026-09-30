@@ -1,0 +1,43 @@
+name: Returning resident separate stack
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'loader/**'
+      - 'payload/resident_call_probe.c'
+      - 'payload/probe_log.h'
+      - 'payload/probe_linker.ld'
+      - 'tools/*resident*'
+      - 'tests/test_stack_call.c'
+      - 'tests/test_resident_services.c'
+      - 'docs/RESIDENT_STACK.md'
+      - '.github/workflows/resident-stack.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test stack return and guard pages
+        env:
+          CC: ${{ matrix.compiler }}
+        run: sh tools/test_resident_stack.sh
+      - name: Fetch pinned SDK
+        if: matrix.compiler == 'gcc'
+        run: |
+          git clone https://github.com/Scene-Collective/ps4-payload-sdk.git stack-sdk
+          git -C stack-sdk checkout b7326416c23ce14639e9180a24093bdc5eedb579
+      - name: Build separate stack test
+        if: matrix.compiler == 'gcc'
+        run: sh tools/build_resident_calls.sh stack-sdk "$GITHUB_SHA" stack
+      - uses: actions/upload-artifact@v4
+        if: matrix.compiler == 'gcc'
+        with:
+          name: PS4-Windows-Loader-Resident-Stack-Experimental
+          path: build/resident-stack/
+          retention-days: 30

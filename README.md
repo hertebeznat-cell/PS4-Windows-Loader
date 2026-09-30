@@ -31,7 +31,7 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 | One 16 KiB allocation | Passed on PS4: physical continuity, zeroing and readback |
 | Original KVA release | `kmem_free` returned; independent reclamation not proven |
 | Resident workspace and EFI tables | Passed on PS4: 224 KiB, copies, tables and release |
-| Resident callback execution | Host tests passed; new returning process-context test pending |
+| Resident callback execution | Nine checks passed on PS4 in process context; separate stack pending |
 | CPU handoff and Windows kernel | Not reached |
 
 The completed [Memory-Probe](docs/MEMORY_PROBE.md) returned
@@ -203,6 +203,9 @@ preparation passed on the PS4 in build `64a2f64`. The separate
 [returning process callback test](docs/RESIDENT_CALLS.md) now checks all nine
 entries from a copied RX image using synthetic memory descriptors. It does not
 execute in the kernel workspace or switch CPU context. Windows is not launched.
+That process test passed on the PS4 in build `3f52f8c`; the next
+[separate-stack test](docs/RESIDENT_STACK.md) adds guard pages and checks return
+to the original stack while keeping the same process address context.
 
 1. Replace the user-process execution path with a platform-owned boot context
    capable of executing privileged CPU instructions; review the shutdown before

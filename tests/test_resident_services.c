@@ -1,6 +1,9 @@
 #define _GNU_SOURCE
 #include "resident_fixture.h"
 #include "pwl_resident_selftest.h"
+#ifdef PWL_TEST_STACK
+#include "pwl_stack_call.h"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +14,22 @@ static int checkpoint(unsigned call,void *context) {
     assert(context==(void *)1);checkpoint_count++;
     return call==stop_at;
 }
+#ifdef PWL_TEST_STACK
+static struct {
+    void *code;
+    pwl_resident_data_t *data;
+    pwl_resident_call_report_t report;
+    uintptr_t low,high,observed;
+} stack_test;
+static int stack_callback(void *context) {
+    assert(context==&stack_test);
+    volatile uint64_t marker=0;
+    stack_test.observed=(uintptr_t)&marker;
+    assert(stack_test.observed>=stack_test.low && stack_test.observed<stack_test.high);
+    return pwl_resident_calls_test(&resident_image,stack_test.code,stack_test.data,
+        &stack_test.report,NULL,NULL);
+}
+#endif
 
 #define EFI __attribute__((ms_abi))
 typedef uint64_t (EFI *raise_fn)(uint64_t);
@@ -81,6 +100,19 @@ static void run_copy(void)
     pwl_resident_image_t bad=resident_image;bad.crc32^=1;
     assert(pwl_resident_calls_test(&bad,code,&d,&report,checkpoint,(void *)1)==PWL_ERR_INVALID_ARGUMENT);
     assert(checkpoint_count==0);
+#ifdef PWL_TEST_STACK
+    size_t guard=16384,stack_bytes=1024*1024;
+    unsigned char *stack=mmap(NULL,stack_bytes+2*guard,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    assert(stack!=MAP_FAILED);
+    assert(mprotect(stack+guard,stack_bytes,PROT_READ|PROT_WRITE)==0);
+    stack_test.code=code;stack_test.data=&d;
+    stack_test.low=(uintptr_t)(stack+guard);stack_test.high=stack_test.low+stack_bytes;
+    pwl_stack_report_t restored={0};
+    assert(pwl_stack_call((void *)stack_test.high,stack_callback,&stack_test,&restored)==PWL_OK);
+    assert(stack_test.report.passed_mask==0x1ff && stack_test.report.last_call==9);
+    assert(restored.before==restored.after && restored.entered==stack_test.high);
+    assert(munmap(stack,stack_bytes+2*guard)==0);
+#endif
     assert(munmap(code,4096)==0);
 }
 int main(void)

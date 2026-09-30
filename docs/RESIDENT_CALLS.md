@@ -1,5 +1,11 @@
 # Returning resident callback test in the process context
 
+Build `3f52f8ca4d8cd1972cf9de8fe988509232b7eee5` passed on the PS4:
+`result=0 passed_mask=1ff last_call=9 release=0`, with the expected unsupported
+ExitBootServices status. All nine call checkpoints and the final result were
+recorded. Code ran at `0x200CE8000`, above 4 GiB. Do not repeat this completed
+test. The next experiment is [separate-stack execution](RESIDENT_STACK.md).
+
 Resident preparation build `64a2f64211849a68a307a23da8d3778ea3d7a019`
 completed on the PS4. The supplied log records `rc=0 stage=5 error=0`,
 224 KiB owned memory at PA `0x516C0000`, four table pages, eight regions,
@@ -33,8 +39,8 @@ The code mapping is released after a normal return.
    permissions through undocumented platform calls. Preserve that log.
 5. If the console hangs, do not repeat the run.
 
-Hardware execution of this new variant is unverified; a crash remains possible.
-Passing establishes process-context callback behavior only. Privileged resident
+The procedure above is retained for reproducibility. Passing establishes
+process-context callback behavior only. Privileged resident
 execution, executable kernel mappings, platform handoff and Windows boot still
 require separate work.
 
