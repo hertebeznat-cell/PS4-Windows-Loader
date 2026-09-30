@@ -138,3 +138,12 @@ Its build ID, binding result, allocation/PA check, free-return and user-return
 must be visible in notifications even without USB logging. That payload is
 **not built yet**; no CR3 switch, EFI entry, device changes or low-memory writes
 are authorized by a passing memory test. Windows boot remains a later milestone.
+
+
+## Next observations
+
+A separate [Anchor-Probe](ANCHOR_PROBE.md) now collects live LSTAR, callback
+entry flags/alignment and user-process kernel version strings. Its result is
+not a profile approval: no candidate address is read or called, no kernel base
+is derived, and the handler/VM contract and five symbols remain unverified.
+The previously described allocation/free payload is still not built.

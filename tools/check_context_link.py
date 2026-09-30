@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject a context probe that uses the ELF's fixed callback address."""
 import re
+import os
 import subprocess
 import sys
 import struct
@@ -8,16 +9,17 @@ from pathlib import Path
 
 if len(sys.argv) not in (2, 3):
     raise SystemExit("usage: check_context_link.py probe.elf [probe.bin]")
+prefix = os.environ.get("PWL_CAPTURE_PREFIX", "pwl_context")
 elf = sys.argv[1]
 symbols = subprocess.check_output(["nm", "-n", elf], text=True)
 addresses = {}
 for line in symbols.splitlines():
     fields = line.split()
-    if len(fields) == 3 and fields[2] in {"pwl_context_capture", "pwl_context_capture_end"}:
+    if len(fields) == 3 and fields[2] in {prefix + "_capture", prefix + "_capture_end"}:
         addresses[fields[2]] = int(fields[0], 16)
-if set(addresses) != {"pwl_context_capture", "pwl_context_capture_end"}:
+if set(addresses) != {prefix + "_capture", prefix + "_capture_end"}:
     raise SystemExit("missing capture symbols")
-length = addresses["pwl_context_capture_end"] - addresses["pwl_context_capture"]
+length = addresses[prefix + "_capture_end"] - addresses[prefix + "_capture"]
 if not 0 < length <= 4096:
     raise SystemExit(f"invalid capture extent in ELF: {length}")
 main = subprocess.check_output(["objdump", "-d", "--disassemble=main", elf], text=True)
@@ -61,3 +63,4 @@ if len(sys.argv) == 3:
         if raw[start:start + section[5]] != expected:
             raise SystemExit(f"raw payload section mismatch: {name}")
     print("raw payload: all sections present, including zero-initialized BSS")
+

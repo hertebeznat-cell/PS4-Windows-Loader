@@ -108,6 +108,14 @@ jobs:
             -o build/test-context-probe
           ./build/test-context-probe
 
+      - name: Test returning anchor probe without kernel entry
+        run: |
+          clang -std=c11 -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/test_anchor_probe.c payload/anchor_capture.S \
+            -o build/test-anchor-probe
+          ./build/test-anchor-probe
+
   ps4-loader:
     name: Build latest PS4 loader
     runs-on: ubuntu-24.04
@@ -232,6 +240,14 @@ jobs:
           cp PS4_RUNTIME_COMMIT.txt build/context-probe/
           cp docs/CONTEXT_PROBE.md build/context-probe/README.md
           printf '%s\n' "$GITHUB_SHA" > build/context-probe/COMMIT.txt
+      - name: Build returning syscall anchor probe
+        run: sh tools/build_anchor_probe.sh ps4-runtime "$GITHUB_SHA"
+      - name: Upload returning syscall anchor probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Anchor-Probe
+          path: build/anchor-probe/
+          retention-days: 30
       - name: Upload returning CPU context probe
         uses: actions/upload-artifact@v4
         with:
@@ -244,3 +260,4 @@ jobs:
           name: PS4-Windows-Loader-CPU-Probe
           path: build/cpu-probe/
           retention-days: 30
+

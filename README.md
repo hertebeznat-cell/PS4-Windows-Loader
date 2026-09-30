@@ -193,3 +193,10 @@ tracks Microsoft requirements against evidence available for the target PS4.
 
 MIT license; see [LICENSE](LICENSE). The repository does not distribute
 Microsoft Windows files, Sony firmware, product keys or proprietary drivers.
+
+
+The separate [Anchor-Probe](docs/ANCHOR_PROBE.md) diagnostic collects the live
+syscall entry address, callback flags/alignment and available kernel version
+strings through screen notifications, with optional USB logging. It provides
+new observations for the 13.52 binding investigation; allocator confirmation
+and Windows boot remain unresolved. Use its own CI artifact and instructions.
