@@ -88,3 +88,32 @@ This narrows the next task to the selected table value, its exact role and the
 installed kernel handler implementation. The entry writer's CR0 writes are
 observations of GoldHEN code, not operations added to our loader. No allocation
 payload is authorized by this analysis, and the production binding stays refused.
+
+## Resolved 13.52 syscall-11 target
+
+The resolver at `0x12A22` passes `RSP+0xC` to selector `0x64D8`. That selector's
+1352 branch at `0x6726` calls table builder `0xB377`. This is distinct from the
+patch table builder at `0xB5F7`; conflating them gives incorrect field identities.
+
+| Role established by use site | Table field | Kernel-relative value |
+| --- | --- | --- |
+| Syscall-11 target stored to `0x9B8A0` | `0x118` (resolver stack `0x124`) | `0x4D6D0` |
+| Syscall table used by 48-byte entry writer | `0x108` (resolver stack `0x114`) | `0x1102B70` |
+
+At `0xB592`, `movabs` loads `0x026473500004D6D0` into RDX; the store at `0xB5BE`
+writes it to table field `0x118`. The resolver consumes the low DWORD. At
+`0xB569`, RSI receives `0x026542C001102B70`, stored to field `0x108` at `0xB59C`.
+The offline inspector now reports these values from their immediate bytes.
+
+Combining the photographed LSTAR with GoldHEN's base arithmetic yields candidate
+base `0xFFFFFFFF8433C000`, target `0xFFFFFFFF843896D0`, and syscall table
+`0xFFFFFFFF8543EB70`. These are **derived candidates, not live address checks**.
+No new console reads or calls were made.
+
+The installation path resolves the handler into the external kernel image.
+Following that pointer cannot be completed from the uploaded GoldHEN image alone:
+the pointed-to kernel code has not been supplied or observed. The upload
+therefore identifies which kernel-relative handler to investigate, but does not
+prove its callback argument behavior, thread/lock contract or allocation safety.
+Next evidence must include independently verifiable code for that exact installed
+kernel target (and memory symbols), rather than another register-only probe.

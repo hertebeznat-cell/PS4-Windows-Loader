@@ -26,7 +26,10 @@ def inspect(data):
         raise ValueError('Unexpected internal image')
     return inner, {'outer_sha256': OUTER_SHA, 'inner_sha256': digest,
                    'compressed_file_offset': '0x6900', 'compressed_size': size,
-                   'inner_size': len(inner), 'binding_verified': False}
+                   'inner_size': len(inner),
+                   'firmware_1352_syscall11_kernel_offset': hex(struct.unpack_from('<I', inner, 0xB594)[0]),
+                   'firmware_1352_sysent_kernel_offset': hex(struct.unpack_from('<I', inner, 0xB56B)[0]),
+                   'binding_verified': False}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
