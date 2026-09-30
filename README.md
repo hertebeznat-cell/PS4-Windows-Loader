@@ -8,7 +8,7 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 
 ![Build](https://github.com/hertebeznat-cell/ps4-windows-loader/actions/workflows/ci.yml/badge.svg)
 ![Latest source](https://img.shields.io/badge/latest_source-Stage_4.8-6e56cf)
-![Hardware result](https://img.shields.io/badge/latest_hardware-anchor_callback_returned-287d55)
+![Hardware result](https://img.shields.io/badge/latest_hardware-one_page_memory_passed-287d55)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
@@ -22,6 +22,24 @@ PS4 Slim CUH-2208B · Baikal · AMD Jaguar x86-64
 > The current build is a limited preflight: it maps `bootmgfw.efi` and returns
 > without calling Microsoft's entry point. The second fault's bytes are already
 > present in the collected trace; no additional console run is needed.
+
+## Latest hardware progress · 30 September 2026
+
+| Check | Result |
+| :-- | :-- |
+| Installed 13.52 kernel capture | ELF/base/version checked; kept private |
+| One 16 KiB allocation | Passed on PS4: physical continuity, zeroing and readback |
+| Original KVA release | `kmem_free` returned; independent reclamation not proven |
+| Resident workspace | New returning preparation experiment; hardware result pending |
+| CPU handoff and Windows kernel | Not reached |
+
+The completed [Memory-Probe](docs/MEMORY_PROBE.md) returned
+`rc=0 stage=5 error=0`. Its internal stage 5 is not Windows boot Stage 5.
+The next [Workspace-Probe](docs/WORKSPACE_PROBE.md) checks a larger owned arena,
+resident copies and independent page tables, then frees it and returns.
+It uses synthetic code/media, does not activate CR3 or enter Microsoft code,
+and remains experimental. Production memory binding still refuses calls.
+Do not repeat the completed dumper or one-page test.
 
 ## Where it stands
 

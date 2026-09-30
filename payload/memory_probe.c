@@ -6,6 +6,13 @@ SYSCALL(probe_fsync,95);
 #ifndef PS4WL_BUILD_ID
 #define PS4WL_BUILD_ID "local"
 #endif
+#ifdef PWL_WORKSPACE_PROBE
+#include "workspace_report.h"
+static volatile pwl_workspace_report_t workspace_result;
+#define PWL_PROBE_LABEL "PS4WL Workspace"
+#else
+#define PWL_PROBE_LABEL "PS4WL Memory"
+#endif
 extern unsigned char _start[], __pwl_image_end[];
 typedef unsigned long long vm_u64;
 typedef vm_u64 (*alloc_fn)(void *,vm_u64,int,vm_u64,vm_u64,unsigned long,unsigned long,char);
@@ -48,6 +55,13 @@ static int probe(struct thread *td,void *args) {
   alloc_fn allocate=(alloc_fn)(base+0x24d4f0);
   free_fn release=(free_fn)(base+0x466460);
   extract_fn extract=(extract_fn)(base+0x573d0);
+#ifdef PWL_WORKSPACE_PROBE
+  result.stage=2;
+  int workspace_rc=pwl_workspace_experiment(map,pmap,allocate,release,extract,&workspace_result);
+  result.kva=workspace_result.kva;result.pa=workspace_result.pa;
+  result.stage=workspace_result.stage;result.error=workspace_rc?13:0;
+  return 0;
+#else
   result.stage=2;
   vm_u64 kva=allocate(map,0x4000,0x101,0x100000,1ULL<<47,0x4000,0,6);
   result.kva=kva;
@@ -75,32 +89,48 @@ static int probe(struct thread *td,void *args) {
   release(map,kva,0x4000);
   result.stage=5; /* void free returned; not independent proof of reclamation */
   return 0;
+#endif
 }
 int _main(struct thread *unused) {
   UNUSED(unused);initKernel();initLibc();
-  printf_notification("PS4WL Memory: entered %s",PS4WL_BUILD_ID);
-  if(get_firmware()!=1352 || !is_jailbroken()) {printf_notification("PS4WL Memory: requires 13.52/HEN");return 1;}
+  printf_notification(PWL_PROBE_LABEL ": entered %s",PS4WL_BUILD_ID);
+  if(get_firmware()!=1352 || !is_jailbroken()) {printf_notification(PWL_PROBE_LABEL ": requires 13.52/HEN");return 1;}
   size_t bytes=(size_t)(__pwl_image_end-_start);
-  if(!bytes || mlock(_start,bytes)!=0) {printf_notification("PS4WL Memory: payload lock failed; stopped");return 1;}
-  printf_notification("PS4WL Memory: one-page experiment starting");
+  if(!bytes || mlock(_start,bytes)!=0) {printf_notification(PWL_PROBE_LABEL ": payload lock failed; stopped");return 1;}
+  printf_notification(PWL_PROBE_LABEL ": experiment starting");
   int rc=kexec(probe,NULL);
   int unlock_rc=munlock(_start,bytes);
-  printf_notification("PS4WL Memory: returned rc=%d stage=%u error=%u",rc,result.stage,result.error);
-  printf_notification("PS4WL Memory: critical=%u locks=%u flags=%llx",result.critical,result.locks,(unsigned long long)result.flags);
-  printf_notification("PS4WL Memory: KVA=%llx PA=%llx",(unsigned long long)result.kva,(unsigned long long)result.pa);
-  char log[640];
+  printf_notification(PWL_PROBE_LABEL ": returned rc=%d stage=%u error=%u",rc,result.stage,result.error);
+  printf_notification(PWL_PROBE_LABEL ": critical=%u locks=%u flags=%llx",result.critical,result.locks,(unsigned long long)result.flags);
+  printf_notification(PWL_PROBE_LABEL ": KVA=%llx PA=%llx",(unsigned long long)result.kva,(unsigned long long)result.pa);
+#ifdef PWL_WORKSPACE_PROBE
+  printf_notification(PWL_PROBE_LABEL ": prep=%d tables=%d release=%d",workspace_result.prepare_status,workspace_result.table_status,workspace_result.release_status);
+  printf_notification(PWL_PROBE_LABEL ": bytes=%llu tables=%u copies=%u",workspace_result.bytes,workspace_result.tables,workspace_result.copy_ok);
+#endif
+  char log[1024];
   int n=snprintf(log,sizeof(log),"build=%s rc=%d stage=%u error=%u critical=%u locks=%u cs=%x flags=%llx base=%llx kva=%llx pa=%llx unlock_rc=%d\n",
     PS4WL_BUILD_ID,rc,result.stage,result.error,result.critical,result.locks,result.cs,
     (unsigned long long)result.flags,(unsigned long long)result.base,
     (unsigned long long)result.kva,(unsigned long long)result.pa,unlock_rc);
-  int fd=open("/mnt/usb0/PS4WL_MEMORY.LOG",O_WRONLY|O_CREAT|O_APPEND,0600);
+#ifdef PWL_WORKSPACE_PROBE
+  if(n>0 && (size_t)n<sizeof(log)) {
+    int extra=snprintf(log+n,sizeof(log)-(size_t)n,"workspace prep=%d tables_status=%d release=%d bytes=%llu root=%llx tables=%u regions=%u copies=%u\n",
+      workspace_result.prepare_status,workspace_result.table_status,workspace_result.release_status,workspace_result.bytes,
+      workspace_result.root,workspace_result.tables,workspace_result.regions,workspace_result.copy_ok);
+    if(extra<0 || (size_t)extra>=sizeof(log)-(size_t)n)n=-1;else n+=extra;
+  }
+  const char *log_path="/mnt/usb0/PS4WL_WORKSPACE.LOG";
+#else
+  const char *log_path="/mnt/usb0/PS4WL_MEMORY.LOG";
+#endif
+  int fd=open(log_path,O_WRONLY|O_CREAT|O_APPEND,0600);
   if(fd>=0) {
     int good=n>0 && (size_t)n<sizeof(log);size_t done=0;
     while(good && done<(size_t)n) {ssize_t w=write(fd,log+done,(size_t)n-done);if(w<=0 || (size_t)w>(size_t)n-done)good=0;else done+=(size_t)w;}
     if(probe_fsync(fd)!=0)good=0;
     if(close(fd)!=0)good=0;
-    printf_notification(good?"PS4WL Memory: report on USB0":"PS4WL Memory: USB report incomplete");
-  } else printf_notification("PS4WL Memory: no USB log; photograph notifications");
-  if(unlock_rc)printf_notification("PS4WL Memory: payload unlock failed");
+    printf_notification(good?PWL_PROBE_LABEL ": report on USB0":PWL_PROBE_LABEL ": USB report incomplete");
+  } else printf_notification(PWL_PROBE_LABEL ": no USB log; photograph notifications");
+  if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
   return rc || unlock_rc || result.error || result.stage!=5;
 }

@@ -1,8 +1,9 @@
 # Firmware 13.52 memory binding audit
 
-Status: **UNVERIFIED / REFUSED**, not a hardware-ready allocator.
+Status: **production binding REFUSED; one-page diagnostic hardware-tested**.
 Audit baseline: project `59b0f8a9d20f6b4707e88658fb6fe14fd68d41d3`.
-There is no allocator-ready console payload. The [Anchor-Probe hardware result](ANCHOR_PROBE.md#photographed-hardware-result--2026-09-30) records LSTAR and a successful return,
+A separate returning one-page diagnostic passed; production binding and CPU
+handoff remain unsupported. The [Anchor-Probe hardware result](ANCHOR_PROBE.md#photographed-hardware-result--2026-09-30) records LSTAR and a successful return,
 without confirming memory symbols. Do not run Native-Core, repeat the completed
 probes, or disable Stage 4.8 preflight to test this work.
 
@@ -201,3 +202,9 @@ counters are zero, callback TD matches GS:0, CPL/IF/DF, observed version/code,
 map/root pointer shape and user-payload mlock before attempting one page.
 These guards narrow the experiment; they do not approve the production binding
 or prove the full scheduler/VM contract. No hardware result is recorded yet.
+
+
+The [successful Memory-Probe trace](MEMORY_PROBE.md#successful-hardware-result--2026-09-30)
+now supplies one same-build allocation/translation/readback/returning-free result.
+The [workspace diagnostic](WORKSPACE_PROBE.md) is a separate larger-arena test;
+it does not change the production binding gate.

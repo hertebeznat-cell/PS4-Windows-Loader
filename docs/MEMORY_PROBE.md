@@ -3,7 +3,8 @@
 This is a new hardware experiment, not a Windows launcher or approval of the
 production memory backend. It can still panic, deadlock or restart the console.
 Return checks and byte guards do not provide kernel exception containment.
-No successful hardware allocation/free trace is available before this test.
+One successful hardware trace is now recorded below; larger allocations and
+CPU transition remain untested.
 
 The exact installed dump version and short byte signatures of allocator, free,
 extractor, mutex entry and GoldHEN dispatch must match before any VM call. Those
@@ -85,3 +86,15 @@ global address), unsuitable for relocation of a raw binary. The corrected
 build explicitly links PIE, checks ELF type DYN and rejects relocations.
 The inspected memcpy access is now RIP-relative. The initial hardware attempt
 therefore does not establish that allocation or any VM call was reached.
+
+
+## Successful hardware result — 2026-09-30
+
+User supplied PS4WL_MEMORY.LOG from commit
+`ee371c259f1604046dd5f6f53b22a3033e9c7753` and reported no crash:
+rc=0 stage=5 error=0 critical=0 locks=0 CS=0x20 RFLAGS=0x246,
+base=0xFFFFFFFF8433C000 KVA=0xFFFFFF807A4AC000 PA=0x1BA68000,
+unlock_rc=0. This records one 16 KiB allocation, all subpage translations,
+zero/readback checks and a returning void free. It is not independent evidence
+of physical reclamation, repeatability, larger allocations or CPU handoff.
+Do not repeat this completed experiment; the next test is WORKSPACE_PROBE.md.
