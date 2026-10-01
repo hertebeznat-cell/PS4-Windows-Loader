@@ -96,3 +96,8 @@ python3 tests/test_pack_files.py
  -fno-omit-frame-pointer -Iloader/include loader/src/transition_map.c \
  tests/test_transition_map.c -o build/test-transition-map
 ./build/test-transition-map
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer -Iloader/include loader/src/exception_context.c \
+ tests/test_exception_context.c -o build/test-exception-context
+./build/test-exception-context

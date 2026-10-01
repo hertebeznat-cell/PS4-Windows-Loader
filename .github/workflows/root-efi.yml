@@ -5,6 +5,9 @@ on:
     paths:
       - 'loader/**'
       - 'payload/boot_source_io.*'
+      - 'payload/exception_context_probe.c'
+      - 'tools/build_exception_context.sh'
+      - 'docs/EXCEPTION_CONTEXT.md'
       - 'tools/build_boot_source.sh'
       - 'docs/BOOT_SOURCE.md'
       - 'payload/memory_probe*'
@@ -58,4 +61,11 @@ jobs:
         with:
           name: PS4-Windows-Loader-EFI-All30-${{ matrix.cc }}
           path: build/all-efi/
+          retention-days: 30
+      - name: Build returning exception context observer
+        run: sh tools/build_exception_context.sh dumper-sdk "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Exception-Context-${{ matrix.cc }}
+          path: build/exception-context/
           retention-days: 30
