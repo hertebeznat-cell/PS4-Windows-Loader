@@ -90,6 +90,11 @@ directly, without emulators. The full ASan/UBSan suite and native development
 build pass locally. No new PS4 result, complete Runtime Services publication,
 hardware timer interrupt, child image execution or Boot Manager entry is claimed.
 
+Clang lowers large variable-slot clearing to a memset call even in freestanding
+mode. The resident link includes the repository's own freestanding byte-operation
+implementation, so compiler-generated helpers resolve inside the copied image.
+The no-import/no-relocation audit remains mandatory; no host C library is linked.
+
 References:
 
 - [UEFI 2.10 Errata A Boot Services](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html)
