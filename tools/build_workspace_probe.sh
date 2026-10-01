@@ -19,6 +19,13 @@ case "$mode" in
   defs="-DPWL_RESIDENT_PROBE -Ibuild/resident"
   name=PS4WindowsLoader-Resident-Probe
   document=docs/RESIDENT_PROBE.md ;;
+ all-efi)
+  sh tools/build_resident.sh
+  out=build/all-efi
+  defs="-DPWL_ROOT_CLONE_PROBE -DPWL_ROOT_EFI_PROBE -DPWL_ALL_EFI_PROBE -fshort-wchar -Ibuild/resident -Iloader/include"
+  probe_defs=""
+  name=PS4WindowsLoader-EFI-All30
+  document=docs/EFI_ALL30.md ;;
  root-efi)
   sh tools/build_resident.sh
   out=build/root-efi
@@ -62,7 +69,7 @@ gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop
  -ffunction-sections -fdata-sections -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
  -Wall -Wextra -Werror -DPWL_WORKSPACE_DIAGNOSTIC $defs -Iloader/include -Ipayload \
  -c payload/workspace_probe_core.c -o "$out/workspace_probe_core.o"
-if [ "$mode" = root-clone ] || [ "$mode" = root-efi ]; then
+if [ "$mode" = root-clone ] || { [ "$mode" = root-efi ] || [ "$mode" = all-efi ]; }; then
  for unit in cpu_state root_clone; do
   gcc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector \
    -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"
@@ -71,7 +78,7 @@ if [ "$mode" = root-clone ] || [ "$mode" = root-efi ]; then
  gcc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector \
   -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include -Ipayload $defs \
   -c payload/root_clone_probe_core.c -o "$out/root_clone_probe_core.o"
- if [ "$mode" = root-efi ]; then
+ if { [ "$mode" = root-efi ] || [ "$mode" = all-efi ]; }; then
   for unit in resident_selftest; do
    gcc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector \
     -fno-tree-loop-distribute-patterns -fpie -fPIC -mno-red-zone -mgeneral-regs-only -Iloader/include \
@@ -90,7 +97,7 @@ ld -r $objects "$out/workspace_probe_core.o" -o "$out/core.o"
 objcopy --redefine-sym memcpy=pwl_native_memcpy --redefine-sym memset=pwl_native_memset \
  --redefine-sym memmove=pwl_native_memmove "$out/core.o"
 startup="$sdk/libPS4/crt0.s"
-if [ "$mode" = root-clone ] || [ "$mode" = root-efi ] || [ "$mode" = usb-log ] || [ "$mode" = usb-existing ]; then
+if [ "$mode" = root-clone ] || { [ "$mode" = root-efi ] || [ "$mode" = all-efi ]; } || [ "$mode" = usb-log ] || [ "$mode" = usb-existing ]; then
  gcc -c -m64 payload/probe_start.S -o "$out/probe_start.o"
  startup="$out/probe_start.o"
 fi
@@ -123,8 +130,12 @@ fi
 if [ "$mode" = root-clone ]; then
  printf '%s\n' 'IDENTICAL_ROOT_CLONE; bounded CR3/stack round trip; no EFI root activation; Windows not called' > "$out/MODE.txt"
 fi
-if [ "$mode" = root-efi ]; then
+if { [ "$mode" = root-efi ] || [ "$mode" = all-efi ]; }; then
  cp build/resident/MANIFEST.json "$out/RESIDENT-MANIFEST.json"
  printf '%s\n' 'IDENTICAL_ROOT_EFI; nine resident callbacks with synthetic descriptors; Windows not called' > "$out/MODE.txt"
 fi
 (cd "$out" && sha256sum *.bin *.elf > SHA256SUMS.txt)
+
+if [ "$mode" = all-efi ]; then
+ printf '%s\n' 'IDENTICAL_ROOT_EFI; thirty callbacks with scratch memory and file fixture; Windows not called' > "$out/MODE.txt"
+fi

@@ -20,9 +20,20 @@ static volatile pwl_root_clone_report_t root_result;
 #include "pwl_resident_selftest.h"
 #include "resident_fixture.h"
 
+#ifdef PWL_ALL_EFI_PROBE
+#define PWL_PROBE_LABEL "PS4WL EFI All30"
+#define PWL_EXPECTED_MASK 0x3fffffffU
+#define PWL_EXPECTED_CALL 30U
+#else
 #define PWL_PROBE_LABEL "PS4WL Root EFI"
+#define PWL_EXPECTED_MASK 0x1ffU
+#define PWL_EXPECTED_CALL 9U
+#endif
 #define PWL_RETURN_MODE "IDENTICAL_ROOT_EFI"
 static pwl_resident_data_t root_efi_data;
+#ifdef PWL_ALL_EFI_PROBE
+static unsigned char all_efi_scratch[4096] __attribute__((aligned(4096)));
+#endif
 static pwl_resident_call_report_t root_efi_report;
 static pwl_resident_image_t root_efi_image;
 static void *root_efi_code;
@@ -34,8 +45,13 @@ int pwl_root_efi_callback(void *context) {
   root_efi_observed=(uint64_t)(uintptr_t)&marker;
   if(root_efi_observed<r->kva+16384 || root_efi_observed>=r->kva+32768)
     return PWL_ERR_INVALID_ARGUMENT;
+  #ifdef PWL_ALL_EFI_PROBE
+  return pwl_resident_all_calls_test(&root_efi_image,root_efi_code,&root_efi_data,
+      all_efi_scratch,sizeof(all_efi_scratch),&root_efi_report);
+#else
   return pwl_resident_calls_test(&root_efi_image,root_efi_code,&root_efi_data,
       &root_efi_report,NULL,NULL);
+#endif
 }
 static int prepare_root_efi(void) {
   root_efi_image=resident_fixture();
@@ -309,7 +325,7 @@ static __attribute__((noinline)) int run_test(void) {
   else printf_notification(PWL_PROBE_LABEL ": report saved %s",report_path);
   if(unlock_rc)printf_notification(PWL_PROBE_LABEL ": payload unlock failed");
 #ifdef PWL_ROOT_EFI_PROBE
-  if(code_unlock || code_release || root_efi_report.passed_mask!=0x1ff || root_efi_report.last_call!=9)return 1;
+  if(code_unlock || code_release || root_efi_report.passed_mask!=PWL_EXPECTED_MASK || root_efi_report.last_call!=PWL_EXPECTED_CALL)return 1;
 #endif
   return rc || unlock_rc || result.error || result.stage!=5 || report_optional_status(log_status);
 }

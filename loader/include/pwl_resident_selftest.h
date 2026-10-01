@@ -13,4 +13,9 @@ typedef struct pwl_resident_call_report {
 pwl_status_t pwl_resident_calls_test(const pwl_resident_image_t *image,
     void *code,pwl_resident_data_t *data,pwl_resident_call_report_t *report,
     int (*checkpoint)(unsigned,void *),void *context);
+/* Extended diagnostic uses one actual mapped scratch page for pool writes,
+ * a temporary in-memory file fixture and all thirty callbacks. No Windows entry. */
+pwl_status_t pwl_resident_all_calls_test(const pwl_resident_image_t *image,
+    void *code,pwl_resident_data_t *data,void *scratch,size_t scratch_bytes,
+    pwl_resident_call_report_t *report);
 #endif

@@ -21,6 +21,7 @@ on:
       - 'tests/test_root_clone.c'
       - 'tests/test_root_source.c'
       - 'docs/ROOT_EFI.md'
+      - 'docs/EFI_ALL30.md'
       - 'tests/test_verified_usb.c'
       - '.github/workflows/root-efi.yml'
   workflow_dispatch:
@@ -50,4 +51,11 @@ jobs:
         with:
           name: PS4-Windows-Loader-Root-EFI-${{ matrix.cc }}
           path: build/root-efi/
+          retention-days: 30
+      - name: Build combined thirty-call check
+        run: sh tools/build_workspace_probe.sh dumper-sdk "$GITHUB_SHA" all-efi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-EFI-All30-${{ matrix.cc }}
+          path: build/all-efi/
           retention-days: 30

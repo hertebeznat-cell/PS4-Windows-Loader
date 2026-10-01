@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <stdlib.h>
 static pwl_resident_image_t resident_image;
 static unsigned checkpoint_count,stop_at;
 static int checkpoint(unsigned call,void *context) {
@@ -255,6 +256,11 @@ static void run_copy(void)
     pwl_resident_image_t bad=resident_image;bad.crc32^=1;
     assert(pwl_resident_calls_test(&bad,code,&d,&report,checkpoint,(void *)1)==PWL_ERR_INVALID_ARGUMENT);
     assert(checkpoint_count==0);
+unsigned char *all_scratch=aligned_alloc(4096,4096);
+    assert(all_scratch);
+    assert(pwl_resident_all_calls_test(&resident_image,code,&d,all_scratch,4096,&report)==PWL_OK);
+    assert(report.passed_mask==0x3fffffff && report.last_call==30);
+    free(all_scratch);
 #ifdef PWL_TEST_STACK
     size_t guard=16384,stack_bytes=1024*1024;
     unsigned char *stack=mmap(NULL,stack_bytes+2*guard,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
