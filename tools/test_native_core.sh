@@ -14,7 +14,7 @@ sh tools/build_resident.sh
     -DPWL_PS4_MEMORY_HOST_TEST \
     loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c loader/src/paging.c \
     loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
-    loader/src/native_workspace.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
+    loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
     loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
     tests/test_resident_services.c -o build/test-resident-services
 ./build/test-resident-services
@@ -61,7 +61,7 @@ python3 tests/test_pack_files.py
     loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
     loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/firmware_media.c loader/src/efi_tables.c \
-    loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
+    loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace
 
@@ -111,3 +111,8 @@ python3 tests/test_pack_files.py
  -fno-omit-frame-pointer -Iloader/include loader/src/efi_entry_call.S \
  tests/test_efi_entry_call.c -o build/test-efi-entry-call
 ./build/test-efi-entry-call
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer -Iloader/include loader/src/table_snapshot.c \
+ loader/src/transition_map.c tests/test_table_snapshot.c -o build/test-table-snapshot
+./build/test-table-snapshot

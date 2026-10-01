@@ -2,6 +2,7 @@
 #include "pwl_boot_source.h"
 #include "pwl_native_transition.h"
 #include "pwl_efi_entry.h"
+#include "pwl_entry_pipeline.h"
 #include "pe_fixture.h"
 #include "resident_fixture.h"
 static pwl_resident_image_t resident_image;
@@ -361,6 +362,15 @@ static void test_resident_boot_image(void)
 
 static void test_transition_plan(pwl_native_workspace_t *w);
 
+static pwl_status_t snapshot_fixture_read(void *context,uint64_t pa,uint64_t out[512])
+{
+    const pwl_x64_table_page_t *source=context;
+    for(size_t i=0;i<4;i++) if(source[i].physical_address==pa) {
+        memcpy(out,source[i].entries,4096);return PWL_OK;
+    }
+    return PWL_ERR_NOT_FOUND;
+}
+
 static void test_transition_plan(pwl_native_workspace_t *w)
 {
     static uint64_t old[4][512];
@@ -397,6 +407,20 @@ static void test_transition_plan(pwl_native_workspace_t *w)
     assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->stack.physical_address-4096,&x)!=PWL_OK);
     assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->stack.physical_address+w->stack.size,&x)!=PWL_OK);
     assert(pwl_x64_translate(tables,plan.table_count,plan.root,va+23,&x)==PWL_OK && x.physical_address==pa+23);
+    static uint64_t snapshot_pages[8][512];pwl_x64_table_page_t snapshot[8];
+    for(size_t i=0;i<8;i++)snapshot[i]=(pwl_x64_table_page_t){0,snapshot_pages[i]};
+    pwl_x64_cpu_state_t cpu={UINT64_C(0x80010001),0x1000,0x20,0xd00};
+    pwl_entry_pipeline_report_t pipeline;
+    pwl_status_t prepared=pwl_native_entry_capture_prepare(w,&resident_image,&cpu,
+        snapshot_fixture_read,before,snapshot,8,&dep,1,&span,tables,32,&plan,&entry,&pipeline);
+    if(w->boot_image.entry_address) {
+        assert(prepared==PWL_OK && pipeline.stage==4 && pipeline.snapshot_count==4 && plan.root==span.physical_address);
+        assert(entry.entry==w->boot_image.entry_address);
+    } else assert(prepared==PWL_ERR_INVALID_ARGUMENT && pipeline.stage==3 && !plan.root);
+    cpu.cr4|=UINT64_C(1)<<17;
+    assert(pwl_native_entry_capture_prepare(w,&resident_image,&cpu,
+        snapshot_fixture_read,before,snapshot,8,&dep,1,&span,tables,32,&plan,&entry,&pipeline)==PWL_ERR_INVALID_ARGUMENT);
+    assert(pipeline.stage==0 && !plan.root);
     assert(w->table_count==original_count && w->tables[0].entries[0]==original_root);
     assert(pwl_native_resident_environment_validate(w,&resident_image)==PWL_OK);
     old[3][0]|=8;

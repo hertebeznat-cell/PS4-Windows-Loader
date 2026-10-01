@@ -318,3 +318,7 @@ RX Microsoft AMD64 ABI adapter retaining the complete 64-bit EFI return status.
 See [EFI_ENTRY](docs/EFI_ENTRY.md). Console CPU entry is still unconnected:
 complete live handler/stack dependencies and the production platform contract
 remain prerequisites.
+Full reachable page-table capture is now connected to independent plan and EFI
+argument preparation in one transaction. See [TABLE_SNAPSHOT](docs/TABLE_SNAPSHOT.md).
+This does not supply the console physical reader or guarantee complete handler
+and stack dependencies; CPU entry remains unconnected.
