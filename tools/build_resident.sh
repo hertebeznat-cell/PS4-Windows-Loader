@@ -26,7 +26,7 @@ ld --no-undefined --no-relax --gc-sections -T loader/resident.ld \
   -u pwl_resident_file_delete -u pwl_resident_file_read -u pwl_resident_file_write \
   -u pwl_resident_file_get_position -u pwl_resident_file_set_position \
   -u pwl_resident_file_get_info -u pwl_resident_file_set_info -u pwl_resident_file_flush \
-  -u pwl_resident_open_protocol -u pwl_resident_close_protocol \
+  -u pwl_resident_open_protocol -u pwl_resident_close_protocol -u pwl_resident_unsupported \
   "$out/firmware_files.o" "$out/resident_services.o" "$out/firmware_memory.o" "$out/efi_tables.o" \
   "$out/binding.o" -o "$out/resident.elf"
 objcopy -O binary "$out/resident.elf" "$out/resident.bin"

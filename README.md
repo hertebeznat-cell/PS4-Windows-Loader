@@ -290,7 +290,7 @@ The [resident read-only file volume](docs/RESIDENT_FILES.md) now provides EFI
 OpenVolume and revision-1 file methods from an owned preloaded archive. Native
 preparation publishes the filesystem protocol with physical addresses; copied
 code checks cover opening, reading, directory enumeration and file information.
-This adds 11 filesystem callbacks (30 total resident entries including the
+This adds 11 filesystem callbacks (30 implemented resident entries including the
 new OpenProtocol/CloseProtocol query services), not live USB
 access or a Boot Manager launch. The unified archive-to-image preparation now binds DeviceHandle/FilePath to
 the chosen resident file. Console preload and platform handoff remain incomplete.
@@ -330,3 +330,9 @@ The supplied complete EFI tree was audited: its real bootmgfw.efi passes native
 PE copy/relocation above 4 GiB, and bootx64.efi is identical. The file archive
 limit was raised from 128 to 256 records to retain all 197 records (148 files).
 See [EFI_ARCHIVE_AUDIT](docs/EFI_ARCHIVE_AUDIT.md). No Microsoft code was executed.
+
+Unimplemented Boot Services now have a resident EFI_UNSUPPORTED adapter instead
+of null callable pointers; the reserved field stays zero. The image exports 31
+entry symbols, preserving the previous 30 callback indices. See
+[BOOT_SERVICE_FALLBACK](docs/BOOT_SERVICE_FALLBACK.md). Missing runtime/console
+interfaces and the console transition still prevent a complete Boot Manager entry.

@@ -37,7 +37,7 @@ names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'uninstall_protocol', 'handle_protocol', 'locate_handle', 'locate_protocol',
          'open_volume', 'file_open', 'file_close', 'file_delete', 'file_read', 'file_write',
          'file_get_position', 'file_set_position', 'file_get_info', 'file_set_info', 'file_flush',
-         'open_protocol', 'close_protocol']
+         'open_protocol', 'close_protocol', 'unsupported']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()

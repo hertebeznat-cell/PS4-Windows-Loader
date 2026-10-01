@@ -9,11 +9,14 @@ int main(void)
                               UINT64_C(0x27a301000),4096,
                               {0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256}};
     pwl_efi_prepared_tables_t t, good;
-    s.callback_offsets[28]=272;s.callback_offsets[29]=288;
+    s.callback_offsets[28]=272;s.callback_offsets[29]=288;s.callback_offsets[30]=304;
     assert(pwl_efi_crc32("123456789",9) == UINT32_C(0xcbf43926));
     assert(pwl_efi_crc32(NULL,0) == 0);
     assert(pwl_efi_tables_prepare(&s,&t) == PWL_OK);
     good=t;
+    for(size_t i=0;i<PWL_EFI_BOOT_SLOTS;i++)assert(i==17 ? t.boot.functions[i]==0 : t.boot.functions[i]!=0);
+    assert(t.boot.functions[22]==s.code_pa+304);
+    assert(t.boot.functions[43]==s.code_pa+304);
     assert(t.system.boot_services == s.data_pa+120);
     assert(t.boot.functions[26] == s.code_pa+80);
     assert(t.boot.functions[40] == s.code_pa+96);

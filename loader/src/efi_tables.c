@@ -55,6 +55,11 @@ pwl_status_t pwl_efi_tables_prepare(const pwl_efi_table_spec_t *s,
     out->boot.header = (pwl_efi_header_t){UINT64_C(0x56524553544f4f42),
                                         0x00020000, sizeof(out->boot), 0, 0};
     out->system.boot_services = spec.data_pa + offsetof(pwl_efi_prepared_tables_t, boot);
+    /* Preserve Reserved at slot 17 as NULL. Unsupported services have a real
+     * ABI adapter so an attempted call returns an error instead of branching
+     * through address zero. This does not implement those services. */
+    for (size_t i = 0; i < PWL_EFI_BOOT_SLOTS; ++i)
+        if (i != 17) out->boot.functions[i] = spec.code_pa + spec.callback_offsets[30];
     for (size_t i = 0; i < PWL_EFI_BOOT_CALLBACKS; ++i)
         out->boot.functions[slots[i]] = spec.code_pa + spec.callback_offsets[callback_indices[i]];
     out->boot.header.crc32 = pwl_efi_crc32(&out->boot, sizeof(out->boot));

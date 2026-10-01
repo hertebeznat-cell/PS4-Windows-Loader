@@ -276,9 +276,35 @@ unsigned char *all_scratch=aligned_alloc(4096,4096);
 #endif
     assert(munmap(code,code_bytes)==0);
 }
+static void test_unsupported_slots(void)
+{
+    size_t bytes=(resident_image.size+4095)&~(size_t)4095;
+    void *code=mmap(NULL,bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    assert(code!=MAP_FAILED);memcpy(code,resident_image.bytes,resident_image.size);
+    assert(mprotect(code,bytes,PROT_READ|PROT_EXEC)==0);
+    pwl_efi_prepared_tables_t table;
+    pwl_efi_table_spec_t spec={0};spec.code_pa=(uintptr_t)code;spec.code_bytes=resident_image.size;
+    spec.data_pa=(uintptr_t)&table;spec.data_bytes=sizeof(table);
+    for(size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=resident_image.callbacks[i];
+    assert(pwl_efi_tables_prepare(&spec,&table)==PWL_OK);
+    typedef uint64_t (EFI *unsupported_fn)(uint64_t,uint64_t,uint64_t,uint64_t,uint64_t,uint64_t);
+    unsigned called=0;
+    for(size_t i=0;i<PWL_EFI_BOOT_SLOTS;i++) {
+        if(i==17){assert(!table.boot.functions[i]);continue;}
+        assert(table.boot.functions[i]);
+        if(table.boot.functions[i]==spec.code_pa+resident_image.callbacks[30]) {
+            uintptr_t address=(uintptr_t)table.boot.functions[i];unsupported_fn callback;
+            memcpy(&callback,&address,sizeof(callback));
+            assert(callback(UINT64_MAX,UINT64_MAX,UINT64_MAX,UINT64_MAX,UINT64_MAX,UINT64_MAX)==PWL_EFI_UNSUPPORTED);
+            ++called;
+        }
+    }
+    assert(called==PWL_EFI_BOOT_SLOTS-PWL_EFI_BOOT_CALLBACKS-1);
+    assert(munmap(code,bytes)==0);
+}
 int main(void)
 {
     resident_image=resident_fixture();
-    run_copy();run_copy();
+    run_copy();run_copy();test_unsupported_slots();
     puts("resident callbacks: copied RX code above 4 GiB, Microsoft x64 ABI and nine services passed");
 }

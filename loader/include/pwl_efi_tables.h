@@ -6,7 +6,7 @@
  * pointers. This is an incomplete preparation fixture, not callable firmware.
  */
 #define PWL_EFI_BOOT_SLOTS 44U
-#define PWL_EFI_PREPARED_CALLBACKS 30U
+#define PWL_EFI_PREPARED_CALLBACKS 31U
 #define PWL_EFI_BOOT_CALLBACKS 19U
 typedef struct pwl_efi_header {
     uint64_t signature;
@@ -37,7 +37,8 @@ typedef struct pwl_efi_prepared_tables {
  * The remaining eleven offsets are filesystem protocol methods: OpenVolume,
  * Open, Close, Delete, Read, Write, GetPosition, SetPosition, GetInfo, SetInfo,
  * Flush. They are not Boot Services slots.
- * Final offsets 28/29: OpenProtocol, CloseProtocol (query modes only).
+ * Offsets 28/29: OpenProtocol, CloseProtocol (query modes only).
+ * Offset 30: assembly EFI_UNSUPPORTED adapter for unimplemented Boot Services.
  * Caller must independently establish code provenance, relocations and ABI.
  */
 typedef struct pwl_efi_table_spec {
