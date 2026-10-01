@@ -49,6 +49,8 @@ typedef uint64_t (EFI *remove_fn)(uint64_t,const pwl_efi_guid_t *,void *);
 typedef uint64_t (EFI *handle_fn)(uint64_t,const pwl_efi_guid_t *,void **);
 typedef uint64_t (EFI *locate_fn)(const pwl_efi_guid_t *,void *,void **);
 typedef uint64_t (EFI *handles_fn)(unsigned,const pwl_efi_guid_t *,void *,size_t *,uint64_t *);
+typedef uint64_t (EFI *open_protocol_fn)(uint64_t,const pwl_efi_guid_t *,void **,uint64_t,uint64_t,uint32_t);
+typedef uint64_t (EFI *close_protocol_fn)(uint64_t,const pwl_efi_guid_t *,uint64_t,uint64_t);
 /* POSIX executable mappings permit conversion through memcpy without a C
  * object-pointer/function-pointer cast. Each callback uses the actual ms ABI.
  */
@@ -61,6 +63,7 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
 {
     LOAD(install_fn,install,11);LOAD(replace_fn,replace,12);LOAD(remove_fn,remove,13);
     LOAD(handle_fn,handle,14);LOAD(handles_fn,handles,15);LOAD(locate_fn,locate,16);
+    LOAD(open_protocol_fn,open,28);LOAD(close_protocol_fn,close_protocol,29);
     pwl_efi_guid_t a={{1}},b={{2}},unknown={{3}};
     uint64_t first=0,second=0,list[64];void *interface=NULL;
     int one=1,two=2;
@@ -68,6 +71,18 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     assert(install(&first,&a,0,&two)==PWL_EFI_INVALID_PARAMETER);
     assert(install(&first,&b,0,&two)==0);
     assert(install(&second,&a,0,&two)==0 && second!=first);
+    assert(open(first,&a,NULL,second,0,4)==0);
+    assert(close_protocol(first,&a,second,0)==PWL_EFI_NOT_FOUND);
+    assert(open(first,&a,&interface,second,0,2)==0 && interface==&one);
+    assert(open(first,&a,&interface,second,0,2)==0);
+    assert(open(first,&a,&interface,second,0,1)==0);
+    assert(close_protocol(first,&a,second,0)==0);
+    assert(close_protocol(first,&a,second,0)==PWL_EFI_NOT_FOUND);
+    assert(open(first,&a,&interface,0,0,2)==0 && interface==&one);
+    assert(open(first,&a,&interface,second,0,16)==PWL_EFI_UNSUPPORTED);
+    assert(open(first,&a,&interface,second,0,3)==PWL_EFI_INVALID_PARAMETER);
+    assert(open(first,&a,&interface,UINT64_MAX,0,2)==PWL_EFI_INVALID_PARAMETER);
+    assert(open(first,&a,NULL,second,0,2)==PWL_EFI_INVALID_PARAMETER);
     assert(handle(first,&a,&interface)==0 && interface==&one);
     assert(handle(first,&unknown,&interface)==PWL_EFI_UNSUPPORTED && interface==&one);
     assert(handle(UINT64_MAX,&a,&interface)==PWL_EFI_INVALID_PARAMETER);
@@ -80,7 +95,9 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     assert(handles(1,NULL,NULL,&size,list)==PWL_EFI_INVALID_PARAMETER);
     assert(handles(1,NULL,&one,&size,list)==PWL_EFI_UNSUPPORTED);
     assert(replace(first,&a,&two,&one)==PWL_EFI_NOT_FOUND);
+    assert(open(first,&a,&interface,second,0,2)==0);
     assert(replace(first,&a,&one,&two)==0);
+    assert(close_protocol(first,&a,second,0)==PWL_EFI_NOT_FOUND);
     assert(handle(first,&a,&interface)==0 && interface==&two);
     assert(remove(first,&a,&one)==PWL_EFI_NOT_FOUND);
     assert(remove(first,&a,&two)==0);
@@ -95,9 +112,18 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     }
     uint64_t overflow=0;
     assert(install(&overflow,&a,0,&one)==PWL_EFI_OUT_OF_RESOURCES && !overflow);
+    for (size_t i=0;i<PWL_RESIDENT_OPENS;i++)
+        assert(open(all[0],&a,&interface,all[i],0,2)==0);
+    interface=&two;
+    assert(open(all[0],&a,&interface,all[0],0,1)==PWL_EFI_OUT_OF_RESOURCES && interface==&two);
+    d->opens[0].count=UINT32_MAX;
+    assert(open(all[0],&a,&interface,all[0],0,2)==PWL_EFI_OUT_OF_RESOURCES && interface==&two);
+    d->opens[0].count=1;
     d->memory.exited=1;
     assert(handle(all[0],&a,&interface)==PWL_EFI_ACCESS_DENIED);
     assert(remove(all[0],&a,&one)==PWL_EFI_ACCESS_DENIED);
+    assert(open(all[0],&a,&interface,all[0],0,2)==PWL_EFI_ACCESS_DENIED);
+    assert(close_protocol(all[0],&a,all[0],0)==PWL_EFI_ACCESS_DENIED);
     d->memory.exited=0;
     for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) assert(remove(all[i],&a,&one)==0);
     d->protocol_next_handle=UINT64_MAX;

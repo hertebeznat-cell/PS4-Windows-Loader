@@ -242,3 +242,29 @@ still checks its original subset.
 Boot Manager entry remains blocked on resident file/device protocols, the
 complete platform memory inventory and a CPU/device handoff with mapped
 exception dependencies. The new registry does not remove those requirements.
+
+
+## OpenProtocol and CloseProtocol query modes
+
+The resident image now exports 30 callback entries. OpenProtocol and
+CloseProtocol are appended at manifest indices 28/29 and published in Boot
+Services slots 32/33; filesystem method indices 17–27 remain unchanged.
+
+OpenProtocol supports BY_HANDLE_PROTOCOL (1), GET_PROTOCOL (2), and
+TEST_PROTOCOL (4), with a null ControllerHandle. TEST leaves the interface
+output and reference list untouched. Query calls with no agent return the
+interface without tracking; a nonzero agent must be an installed handle.
+Calls with an agent use up to 64 inline reference records, tracking repeated
+opens and rejecting count overflow without changing the output. CloseProtocol
+requires a known nonzero agent and removes all matching query references.
+
+Reinstall/uninstall clears references to the prior interface. Removing an
+agent's last protocol also clears records owned by that agent. Retired services
+refuse further calls. Driver, child-controller and exclusive attributes are
+explicitly unsupported; this is not a complete UEFI driver model.
+OpenProtocolInformation and controller connection/disconnection remain absent.
+
+Copied-code Microsoft-ABI checks cover all three query modes, repeated opens,
+closing all references, replacement, invalid attributes/agents, capacity and
+count overflow, retirement and correct Boot Services slot publication.
+Reference: [UEFI protocol handler services](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html).

@@ -14,6 +14,11 @@ typedef struct pwl_resident_file {
     unsigned active;
 } pwl_resident_file_t;
 #define PWL_RESIDENT_PROTOCOLS 64U
+#define PWL_RESIDENT_OPENS 64U
+typedef struct pwl_resident_open {
+    uint64_t agent;
+    uint32_t protocol_index, attributes, count;
+} pwl_resident_open_t;
 typedef struct pwl_efi_guid { unsigned char bytes[16]; } pwl_efi_guid_t;
 typedef struct pwl_resident_protocol {
     uint64_t handle, interface_address;
@@ -37,6 +42,7 @@ typedef struct pwl_resident_data {
     pwl_efi_prepared_tables_t efi;
     pwl_resident_protocol_t protocols[PWL_RESIDENT_PROTOCOLS];
     uint64_t protocol_next_handle;
+    pwl_resident_open_t opens[PWL_RESIDENT_OPENS];
     pwl_efi_loaded_image_t loaded_image;
     uint64_t filesystem[2]; /* revision and OpenVolume destination address */
     pwl_efi_file_protocol_t file_template;

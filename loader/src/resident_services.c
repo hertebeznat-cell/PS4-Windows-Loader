@@ -108,6 +108,12 @@ static pwl_resident_protocol_t *find_protocol(pwl_resident_data_t *d,
             return &d->protocols[i];
     return NULL;
 }
+static void forget_opens(pwl_resident_data_t *d,const pwl_resident_protocol_t *entry)
+{
+    uint32_t index=(uint32_t)(entry-d->protocols);
+    for (size_t i=0;i<PWL_RESIDENT_OPENS;i++)
+        if (d->opens[i].count && d->opens[i].protocol_index==index) d->opens[i].count=0;
+}
 uint64_t EFI pwl_resident_install_protocol(uint64_t *handle,const pwl_efi_guid_t *guid,
     unsigned type,void *interface)
 {
@@ -140,6 +146,7 @@ uint64_t EFI pwl_resident_reinstall_protocol(uint64_t handle,const pwl_efi_guid_
     pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
     if (!entry || entry->interface_address!=(uint64_t)(uintptr_t)old_interface)
         return PWL_EFI_NOT_FOUND;
+    forget_opens(d,entry);
     entry->interface_address=(uint64_t)(uintptr_t)new_interface;
     return PWL_EFI_SUCCESS;
 }
@@ -152,7 +159,11 @@ uint64_t EFI pwl_resident_uninstall_protocol(uint64_t handle,const pwl_efi_guid_
     pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
     if (!entry || entry->interface_address!=(uint64_t)(uintptr_t)interface)
         return PWL_EFI_NOT_FOUND;
+    forget_opens(d,entry);
     *entry=(pwl_resident_protocol_t){0};
+    if (!handle_known(d,handle))
+        for (size_t i=0;i<PWL_RESIDENT_OPENS;i++)
+            if (d->opens[i].agent==handle) d->opens[i].count=0;
     return PWL_EFI_SUCCESS;
 }
 uint64_t EFI pwl_resident_handle_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
@@ -393,3 +404,60 @@ uint64_t EFI pwl_resident_file_set_info(void *self,const pwl_efi_guid_t *guid,si
 }
 uint64_t EFI pwl_resident_file_flush(void *self)
 { return file_handle(state(),self) ? PWL_EFI_SUCCESS : PWL_EFI_INVALID_PARAMETER; }
+
+/* Query-only OpenProtocol. Driver/exclusive/controller ownership needs a
+ * separate driver model and is explicitly refused, rather than simulated. */
+uint64_t EFI pwl_resident_open_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
+    void **interface,uint64_t agent,uint64_t controller,uint32_t attributes)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !handle_known(d,handle) ||
+        (attributes!=4 && !interface) || (agent && !handle_known(d,agent)))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    if (attributes!=1 && attributes!=2 && attributes!=4) {
+        if (attributes==8 || attributes==16 || attributes==32 || attributes==48)
+            return PWL_EFI_UNSUPPORTED;
+        return PWL_EFI_INVALID_PARAMETER;
+    }
+    if (controller) return PWL_EFI_UNSUPPORTED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry) return PWL_EFI_UNSUPPORTED;
+    if (attributes==4) return PWL_EFI_SUCCESS; /* TEST: no interface or record. */
+    if (agent) {
+        uint32_t index=(uint32_t)(entry-d->protocols);
+        size_t free_slot=PWL_RESIDENT_OPENS;
+        for (size_t i=0;i<PWL_RESIDENT_OPENS;i++) {
+            pwl_resident_open_t *open=&d->opens[i];
+            if (!open->count) { if (free_slot==PWL_RESIDENT_OPENS) free_slot=i;continue; }
+            if (open->protocol_index==index && open->agent==agent && open->attributes==attributes) {
+                if (open->count==UINT32_MAX) return PWL_EFI_OUT_OF_RESOURCES;
+                open->count++;*interface=(void *)(uintptr_t)entry->interface_address;
+                return PWL_EFI_SUCCESS;
+            }
+        }
+        if (free_slot==PWL_RESIDENT_OPENS) return PWL_EFI_OUT_OF_RESOURCES;
+        d->opens[free_slot]=(pwl_resident_open_t){agent,index,attributes,1};
+    }
+    *interface=(void *)(uintptr_t)entry->interface_address;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_close_protocol(uint64_t handle,const pwl_efi_guid_t *guid,
+    uint64_t agent,uint64_t controller)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !handle_known(d,handle) || !agent || !handle_known(d,agent))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    if (controller) return PWL_EFI_UNSUPPORTED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry) return PWL_EFI_NOT_FOUND;
+    uint32_t index=(uint32_t)(entry-d->protocols);int closed=0;
+    for (size_t i=0;i<PWL_RESIDENT_OPENS;i++) {
+        pwl_resident_open_t *open=&d->opens[i];
+        if (open->count && open->protocol_index==index && open->agent==agent) {
+            open->count=0;closed=1;
+        }
+    }
+    return closed ? PWL_EFI_SUCCESS : PWL_EFI_NOT_FOUND;
+}
