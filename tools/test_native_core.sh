@@ -12,7 +12,7 @@ sh tools/build_resident.sh
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
     -DPWL_PS4_MEMORY_HOST_TEST \
-    loader/src/main.c loader/src/pe_loader.c loader/src/paging.c \
+    loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c loader/src/paging.c \
     loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
     loader/src/native_workspace.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
     loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
@@ -58,7 +58,7 @@ python3 tests/test_pack_files.py
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     -DPWL_PS4_MEMORY_HOST_TEST -Ibuild/resident \
-    loader/src/main.c loader/src/pe_loader.c \
+    loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
     loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/firmware_media.c loader/src/efi_tables.c \
     loader/src/resident_workspace.c loader/src/native_workspace.c \

@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'loader/**'
+      - 'payload/boot_source_io.*'
+      - 'tools/build_boot_source.sh'
+      - 'docs/BOOT_SOURCE.md'
       - 'payload/memory_probe*'
       - 'payload/root_clone*'
       - 'payload/raw_journal*'
@@ -39,6 +42,8 @@ jobs:
         run: |
           git clone https://github.com/Scene-Collective/ps4-payload-sdk.git dumper-sdk
           git -C dumper-sdk checkout b7326416c23ce14639e9180a24093bdc5eedb579
+      - name: Compile preparation I/O against pinned SDK
+        run: sh tools/build_boot_source.sh dumper-sdk
       - name: Build one returning console test
         run: sh tools/build_workspace_probe.sh dumper-sdk "$GITHUB_SHA" root-efi
       - uses: actions/upload-artifact@v4

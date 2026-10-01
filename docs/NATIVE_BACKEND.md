@@ -268,3 +268,7 @@ Copied-code Microsoft-ABI checks cover all three query modes, repeated opens,
 closing all references, replacement, invalid attributes/agents, capacity and
 count overflow, retirement and correct Boot Services slot publication.
 Reference: [UEFI protocol handler services](https://uefi.org/specs/UEFI/2.10_A/07_Services_Boot_Services.html).
+
+## Preparation source transaction
+
+The bounded archive reader now connects preparation-side I/O to `pwl_native_boot_prepare()`, with partial-read handling, close-before-preparation and staging-buffer cleanup. The pinned SDK adapter compiles separately from the syscall-free core. See [boot source](BOOT_SOURCE.md). Production binding and CPU entry remain unavailable; the historical baseline table above describes the old Stage 4.8 path.

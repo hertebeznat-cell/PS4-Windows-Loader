@@ -1,4 +1,5 @@
 #include "pwl_native_workspace.h"
+#include "pwl_boot_source.h"
 #include "pe_fixture.h"
 #include "resident_fixture.h"
 static pwl_resident_image_t resident_image;
@@ -382,6 +383,80 @@ static void test_resident_files(void)
     assert(!kernel.allocation && !w.arena.kernel_address);
 }
 
+static struct {
+    unsigned char *bytes;size_t length,position;
+    unsigned opens,closes,allocations,releases,reads;
+    int broken,close_error,allocation_error,truncate,extra;
+} source;
+static pwl_status_t source_open(void *context,const char *path,uint64_t *stream,uint64_t *bytes)
+{
+    assert(context==&source && !strcmp(path,"/mnt/usb0/PWL_BOOT.PAK"));
+    source.opens++;source.position=0;*stream=42;*bytes=source.length;return PWL_OK;
+}
+static pwl_status_t source_read(void *context,uint64_t stream,void *out,size_t n,size_t *count)
+{
+    assert(context==&source && stream==42);source.reads++;
+    if (source.broken) return PWL_ERR_IO;
+    size_t available=source.length-source.position;
+    if (source.truncate && available<32) available=0;
+    if (n>17) n=17; /* Realistic short reads throughout the file. */
+    if (n>available) n=available;
+    memcpy(out,source.bytes+source.position,n);source.position+=n;*count=n;
+    if (!n && source.extra) { *(unsigned char *)out=1;*count=1; }
+    return PWL_OK;
+}
+static pwl_status_t source_close(void *context,uint64_t stream)
+{
+    assert(context==&source && stream==42);source.closes++;
+    return source.close_error ? PWL_ERR_IO : PWL_OK;
+}
+static void *source_allocate(void *context,size_t bytes)
+{
+    assert(context==&source);source.allocations++;
+    return source.allocation_error ? NULL : malloc(bytes);
+}
+static void source_release(void *context,void *buffer)
+{
+    assert(context==&source);source.releases++;free(buffer);
+}
+static void test_boot_source(unsigned char *archive,size_t bytes,const uint16_t *path)
+{
+    pwl_ps4_memory_api_t a=api();pwl_native_workspace_t w={0};
+    pwl_native_request_t r={NULL,0,NULL,0,65536,65536,16,1,NULL,0};
+    pwl_boot_source_io_t io={&source,source_open,source_read,source_close,source_allocate,source_release};
+    pwl_boot_source_report_t report;
+    source.bytes=archive;source.length=bytes;
+    unsigned before=kernel.allocations;
+    for (unsigned mode=0;mode<7;mode++) {
+        source.opens=source.closes=source.allocations=source.releases=source.reads=0;
+        source.broken=mode==0;source.close_error=mode==1;
+        source.allocation_error=mode==2;source.truncate=mode==3;source.extra=mode==4;
+        pwl_status_t status=pwl_boot_source_prepare(&io,"/mnt/usb0/PWL_BOOT.PAK",
+            mode==5 ? 512 : bytes,path,&a,&r,&resident_image,&w,&report);
+        assert(source.opens==1 && source.closes==1);
+        if (mode<6) {
+            assert(status!=PWL_OK && report.status==status && kernel.allocations==before);
+            assert(source.releases==(unsigned)(mode!=2 && mode!=5));
+            assert(!w.arena.kernel_address);
+        } else {
+            assert(status==PWL_OK && report.stage==PWL_BOOT_SOURCE_READY);
+            assert(report.read_bytes==bytes && source.releases==1 && source.reads>2);
+            assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+            assert(pwl_native_workspace_release(&w)==PWL_OK);
+        }
+    }
+    before=kernel.allocations;
+    a.firmware=PWL_PS4_FIRMWARE_1352;
+    assert(pwl_boot_source_prepare(&io,"/mnt/usb0/PWL_BOOT.PAK",bytes,path,&a,&r,
+        &resident_image,&w,&report)==PWL_ERR_UNSUPPORTED);
+    assert(!w.arena.kernel_address && kernel.allocations==before);
+    unsigned char saved=archive[0];archive[0]=0;
+    assert(pwl_boot_source_prepare(&io,"/mnt/usb0/PWL_BOOT.PAK",bytes,path,&a,&r,
+        &resident_image,&w,&report)==PWL_ERR_BAD_IMAGE);
+    assert(report.stage==PWL_BOOT_SOURCE_VALIDATE && kernel.allocations==before);
+    archive[0]=saved;
+}
+
 static void test_boot_archive(void)
 {
     unsigned char archive[4096]={0};memcpy(archive,"PWLFILES",8);
@@ -398,6 +473,7 @@ static void test_boot_archive(void)
     pwl_ps4_memory_api_t a=api();pwl_native_workspace_t w={0};
     pwl_native_request_t r={NULL,0,archive,sizeof(archive),65536,65536,16,1,NULL,0};
     kernel.physical=UINT64_C(0x27a300000);
+    test_boot_source(archive,sizeof(archive),path);
     unsigned allocations=kernel.allocations;
     const uint16_t missing[]={'\\','N','O',0};
     assert(pwl_native_boot_prepare(&a,&r,&resident_image,missing,&w)==PWL_ERR_NOT_FOUND);

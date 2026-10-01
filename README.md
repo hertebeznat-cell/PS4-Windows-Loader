@@ -294,3 +294,5 @@ This adds 11 filesystem callbacks (30 total resident entries including the
 new OpenProtocol/CloseProtocol query services), not live USB
 access or a Boot Manager launch. The unified archive-to-image preparation now binds DeviceHandle/FilePath to
 the chosen resident file. Console preload and platform handoff remain incomplete.
+
+USB archive preloading is connected to owned boot-image preparation through `pwl_boot_source_prepare()`; see [boot source transaction](docs/BOOT_SOURCE.md). This remains preparation code, without a new console entry or Boot Manager execution.
