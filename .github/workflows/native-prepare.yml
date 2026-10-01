@@ -1,0 +1,35 @@
+name: Checked native PS4 preparation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'loader/**'
+      - 'payload/native_prepare.c'
+      - 'tools/build_native_prepare.sh'
+      - 'tools/test_native_core.sh'
+      - 'tests/test_ps4_profile.c'
+      - 'docs/PS4_NATIVE_PREPARATION.md'
+      - '.github/workflows/native-prepare.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native core and checked profile tests
+        run: sh tools/test_native_core.sh
+      - name: Fetch pinned SDK
+        run: |
+          git clone https://github.com/Scene-Collective/ps4-payload-sdk.git dumper-sdk
+          git -C dumper-sdk checkout b7326416c23ce14639e9180a24093bdc5eedb579
+      - name: Build checked native preparation entry
+        run: sh tools/build_native_prepare.sh dumper-sdk "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Windows-Loader-Native-Prepare
+          path: build/native-prepare/
+          retention-days: 30

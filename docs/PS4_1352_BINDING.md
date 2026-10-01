@@ -1,9 +1,27 @@
 # Firmware 13.52 memory binding audit
 
-Status: **production binding REFUSED; one-page diagnostic hardware-tested**.
-Audit baseline: project `59b0f8a9d20f6b4707e88658fb6fe14fd68d41d3`.
-A separate returning one-page diagnostic passed; production binding and CPU
-handoff remain unsupported. The [Anchor-Probe hardware result](ANCHOR_PROBE.md#photographed-hardware-result--2026-09-30) records LSTAR and a successful return,
+Current status: **checked production binding implemented for the supplied build;
+successful live binding and new preparation entry not hardware validated**.
+`pwl_ps4_memory_bind_checked` uses real CPL0/LSTAR/thread/CR3 observations and
+the installed protected-copy ABI. It checks exact version/function windows,
+copy loop/fault return/recovery target and stable map/root/counters before
+publishing callable symbols, then repeats validation before allocation/free.
+Other builds and the version-only binder remain refused. The independent pure
+profile inspector does not authorize kernel calls. See
+[Native preparation](PS4_NATIVE_PREPARATION.md) for the trusted copyout/GS
+bootstrap, pinning, tests and remaining launch requirements.
+
+The supplied private kernel capture and completed allocator/workspace probes
+support this installed-build profile. They are not a successful execution of
+the new checked reader, binding or preparation entry. CPU/device handoff
+remains incomplete.
+
+## Historical audit before the installed-build implementation
+
+The rest of this document records the audit baseline at project
+`59b0f8a9d20f6b4707e88658fb6fe14fd68d41d3`; its refusal and missing-evidence
+statements describe that baseline. A separate returning one-page diagnostic
+had passed. The [Anchor-Probe hardware result](ANCHOR_PROBE.md#photographed-hardware-result--2026-09-30) records LSTAR and a successful return,
 without confirming memory symbols. Do not run Native-Core, repeat the completed
 probes, or disable Stage 4.8 preflight to test this work.
 

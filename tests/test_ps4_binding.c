@@ -33,7 +33,7 @@ int main(void)
     int map;
     for (i = 0; i < sizeof(versions) / sizeof(versions[0]); ++i) {
         api = (pwl_ps4_memory_api_t){&map, &map, forbidden_alloc,
-                                    forbidden_free, forbidden_extract, versions[i]};
+                                    forbidden_free, forbidden_extract, versions[i], NULL};
         assert(pwl_ps4_memory_api_validate(&api) == PWL_ERR_UNSUPPORTED);
         assert(pwl_ps4_arena_acquire(&api, 16384, &arena) == PWL_ERR_UNSUPPORTED);
         assert(arena.kernel_address == 0 && arena.size == 0);

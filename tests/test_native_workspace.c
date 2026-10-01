@@ -18,7 +18,8 @@ static void test_transition_plan(pwl_native_workspace_t *w);
 static struct {
     void *allocation;
     uint64_t bytes, physical, bad_page, bad_byte;
-    unsigned allocations, frees, extracts, fail;
+    unsigned allocations, frees, extracts, fail, bad_kva;
+    pwl_ps4_memory_api_t *invalidate_api;
 } kernel;
 
 static pwl_ps4_vm_u64_t allocate(void *map, pwl_ps4_vm_u64_t size, int flags,
@@ -35,7 +36,7 @@ static pwl_ps4_vm_u64_t allocate(void *map, pwl_ps4_vm_u64_t size, int flags,
     assert(kernel.allocation);
     kernel.bytes = size;
     memset(kernel.allocation, 0, (size_t)size);
-    return (uint64_t)(uintptr_t)kernel.allocation;
+    return (uint64_t)(uintptr_t)kernel.allocation+kernel.bad_kva;
 }
 
 static void release(void *map, pwl_ps4_vm_u64_t kva, pwl_ps4_vm_u64_t bytes)
@@ -52,6 +53,7 @@ static pwl_ps4_vm_u64_t extract(void *pmap, pwl_ps4_vm_u64_t kva)
     uint64_t offset = kva - (uint64_t)(uintptr_t)kernel.allocation;
     assert(pmap == &kernel && offset < kernel.bytes);
     ++kernel.extracts;
+    if(kernel.invalidate_api)kernel.invalidate_api->firmware=1352;
     if (kernel.bad_page && offset / 4096 == kernel.bad_page / 4096) return 0;
     if (kernel.bad_byte && offset == kernel.bad_byte) return kernel.physical + offset + 4096;
     return kernel.physical + offset;
@@ -59,7 +61,7 @@ static pwl_ps4_vm_u64_t extract(void *pmap, pwl_ps4_vm_u64_t kva)
 
 static pwl_ps4_memory_api_t api(void)
 {
-    return (pwl_ps4_memory_api_t){&kernel, &kernel, allocate, release, extract, 0};
+    return (pwl_ps4_memory_api_t){&kernel, &kernel, allocate, release, extract, 0, NULL};
 }
 
 static void test_owner(void)
@@ -90,6 +92,15 @@ static void test_owner(void)
     assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);
     assert(kernel.allocation == NULL);
     kernel.physical = 0x4000000;
+    /* A translation failure must not bypass a binding invalidated after
+     * allocation. Preserve the owner and refuse free until validation works. */
+    kernel.physical=0x4000001;kernel.invalidate_api=&a;frees=kernel.frees;
+    assert(pwl_ps4_arena_acquire(&a,16384,&arena)==PWL_ERR_UNSUPPORTED);
+    assert(kernel.allocation && arena.kernel_address==(uintptr_t)kernel.allocation);
+    assert(arena.size==16384 && !arena.physical_address && kernel.frees==frees);
+    kernel.invalidate_api=NULL;a=api();arena.api=a;
+    assert(pwl_ps4_arena_release(&arena)==PWL_OK && kernel.frees==frees+1);
+    kernel.physical=0x4000000;
     assert(pwl_ps4_arena_acquire(&a, 32768, &arena) == PWL_OK);
     assert(pwl_ps4_arena_acquire(&a, 32768, &arena) == PWL_ERR_INVALID_ARGUMENT);
     assert(pwl_ps4_arena_take(&arena, 4096, 4096, &span) == PWL_OK);
@@ -121,6 +132,16 @@ static void test_owner(void)
     assert(arena.physical_address + arena.size == PWL_PS4_IDENTITY_LIMIT);
     assert(pwl_ps4_arena_release(&arena) == PWL_OK);
     assert(pwl_ps4_arena_release(NULL) == PWL_ERR_INVALID_ARGUMENT);
+    kernel.bad_kva=1;frees=kernel.frees;unsigned extracts=kernel.extracts;
+    assert(pwl_ps4_arena_acquire(&a,16384,&arena)==PWL_ERR_INVALID_ARGUMENT);
+    assert(arena.kernel_address==(uintptr_t)kernel.allocation+1 && arena.size==16384);
+    assert(kernel.frees==frees && kernel.extracts==extracts);
+    assert(pwl_ps4_arena_take(&arena,4096,4096,&span)==PWL_ERR_INVALID_ARGUMENT);
+    assert(pwl_ps4_arena_release(&arena)==PWL_ERR_INVALID_ARGUMENT && kernel.frees==frees);
+    /* Fixture owns the real original allocation separately; production cannot
+     * infer this correct address by rounding the malformed result. */
+    release(&kernel,(uintptr_t)kernel.allocation,kernel.bytes);
+    arena=(pwl_ps4_arena_t){0};kernel.bad_kva=0;
     a.free = NULL;
     frees = kernel.allocations;
     assert(pwl_ps4_arena_acquire(&a, 16384, &arena) == PWL_ERR_INVALID_ARGUMENT);

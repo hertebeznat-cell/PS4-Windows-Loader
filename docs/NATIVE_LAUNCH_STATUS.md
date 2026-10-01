@@ -10,7 +10,7 @@ the processor. This is substantial executable code, not a PS4 launch result.
 | --- | --- |
 | Image copy/relocation, children, normal return and Exit | Implemented and native host-tested; actual PS4 execution of this block not performed |
 | Private root and local permission changes | Constructed/audited in preparation; CPL3 refused; controlled CPL0 operation requires established CPU ownership |
-| Main PS4 entry to native preparation/transition | Still absent; Stage 4.8 remains preflight and production memory profiles are refused |
+| PS4 entry to native preparation/transition | Separate Native-Prepare entry connects USB archive and checked 13.52 binding to owned Boot Manager preparation/audit/release; live execution untested. CPU activation remains disconnected; Stage 4.8 remains preflight |
 | Actual RAM/MMIO map and low physical allocations | Owned arena only; no complete platform inventory or reservation of PA 0x00102000, requested in the earlier trace |
 | Returning CPU/FP transition | Implemented CPL0 call saves/restores enabled x87/SSE/AVX, handles TS/PGE, rechecks live state and audits both stacks/control/code; connected to entry preparation, not console main; actual PS4 CR3 execution untested |
 | CPU/exception/FP ownership | Context photographs are point-in-time observations; complete NMI/MCE/GDT/IDT/TSS/GS dependencies, established FP ownership and exception recovery remain absent |

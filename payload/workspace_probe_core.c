@@ -26,7 +26,7 @@ pwl_status_t pwl_ps4_memory_api_validate(const pwl_ps4_memory_api_t *a) {
 int pwl_workspace_experiment(void *map,void *pmap,pwl_workspace_alloc_fn alloc,
  pwl_workspace_free_fn release,pwl_workspace_extract_fn extract,volatile pwl_workspace_report_t *r) {
  if(!r || active || workspace.arena.kernel_address || !map || !pmap || !alloc || !release || !extract)return -1;
- expected=(pwl_ps4_memory_api_t){map,pmap,alloc,release,extract,1352};active=1;
+ expected=(pwl_ps4_memory_api_t){map,pmap,alloc,release,extract,1352,NULL};active=1;
  for(size_t i=0;i<sizeof(media);i++)media[i]=(unsigned char)(i*37);
 #ifdef PWL_RESIDENT_PROBE
  resident_image=resident_fixture();

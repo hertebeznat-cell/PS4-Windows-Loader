@@ -23,8 +23,13 @@ pwl_status_t pwl_ps4_arena_acquire(const pwl_ps4_memory_api_t *api,
                             (unsigned long)PWL_PS4_VM_PAGE_SIZE, 0,
                             VM_MEMATTR_WRITE_BACK);
     if (kva == 0) return PWL_ERR_OUT_OF_RESOURCES;
-    if (kva % PWL_PS4_VM_PAGE_SIZE || size > UINT64_MAX - kva)
-        goto invalid;
+    if (kva % PWL_PS4_VM_PAGE_SIZE || size > UINT64_MAX - kva ||
+        (api->firmware && kva<UINT64_C(0xffff800000000000))) {
+        /* An unexpected KVA is not a validated owner to pass to free. Retain
+         * its raw result and ABI for diagnosis rather than guessing cleanup. */
+        arena->api=*api;arena->kernel_address=kva;arena->size=size;
+        return PWL_ERR_INVALID_ARGUMENT;
+    }
     pa = api->extract(api->kernel_pmap, kva);
     if (pa < PWL_PS4_PHYSICAL_MIN || pa % PWL_PS4_VM_PAGE_SIZE ||
         pa >= PWL_PS4_IDENTITY_LIMIT || size > PWL_PS4_IDENTITY_LIMIT - pa)
@@ -42,8 +47,11 @@ pwl_status_t pwl_ps4_arena_acquire(const pwl_ps4_memory_api_t *api,
     arena->used = 0;
     return PWL_OK;
 invalid:
-    api->free(api->kernel_map, kva, size);
-    return PWL_ERR_INVALID_ARGUMENT;
+    /* Cleanup rechecks the live binding too. If it refuses, preserve the
+     * original owner so its callbacks and reader can remain pinned. */
+    arena->api=*api;arena->kernel_address=kva;arena->size=size;
+    status=pwl_ps4_arena_release(arena);
+    return status==PWL_OK?PWL_ERR_INVALID_ARGUMENT:status;
 }
 
 pwl_status_t pwl_ps4_arena_take(pwl_ps4_arena_t *arena, uint64_t size,
@@ -51,6 +59,13 @@ pwl_status_t pwl_ps4_arena_take(pwl_ps4_arena_t *arena, uint64_t size,
 {
     uint64_t address, padding, offset;
     if (arena == NULL || span == NULL || arena->kernel_address == 0 ||
+        arena->kernel_address%PWL_PS4_VM_PAGE_SIZE ||
+        !arena->size || arena->size%PWL_PS4_VM_PAGE_SIZE ||
+        arena->size>UINT64_MAX-arena->kernel_address ||
+        arena->physical_address<PWL_PS4_PHYSICAL_MIN ||
+        arena->physical_address%PWL_PS4_VM_PAGE_SIZE ||
+        arena->physical_address>=PWL_PS4_IDENTITY_LIMIT ||
+        arena->size>PWL_PS4_IDENTITY_LIMIT-arena->physical_address ||
         size == 0 || size % PWL_PAGE_SIZE || alignment < PWL_PAGE_SIZE ||
         (alignment & (alignment - 1)) || arena->used > arena->size)
         return PWL_ERR_INVALID_ARGUMENT;
@@ -81,6 +96,8 @@ pwl_status_t pwl_ps4_arena_release(pwl_ps4_arena_t *arena)
         return PWL_ERR_INVALID_ARGUMENT;
     status = pwl_ps4_memory_api_validate(&arena->api);
     if (status != PWL_OK) return status;
+    if(arena->api.firmware && arena->kernel_address<UINT64_C(0xffff800000000000))
+        return PWL_ERR_INVALID_ARGUMENT;
     arena->api.free(arena->api.kernel_map, arena->kernel_address, arena->size);
     *arena = (pwl_ps4_arena_t){0};
     return PWL_OK;

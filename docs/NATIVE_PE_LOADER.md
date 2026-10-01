@@ -2,8 +2,10 @@
 
 Status: implemented and host-tested; **no Windows entry or console validation**.
 This closes the missing PE mapping/relocation link inside native workspace
-preparation. It does not resolve the [13.52 kernel binding](PS4_1352_BINDING.md).
-There is no new console payload. Native-Core remains a relocatable development
+preparation. The separate [console preparation entry](PS4_NATIVE_PREPARATION.md)
+now uses the checked [installed-build binding](PS4_1352_BINDING.md) to connect
+USB input to this preparation transaction, without entering Microsoft code.
+Native-Core remains a relocatable development
 object, not a file to send to the PS4.
 
 ## Implemented path

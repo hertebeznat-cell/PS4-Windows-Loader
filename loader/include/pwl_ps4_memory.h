@@ -13,12 +13,21 @@
  */
 typedef unsigned long long pwl_ps4_vm_u64_t;
 
+typedef pwl_status_t (*pwl_ps4_kernel_read_fn)(void *,uint64_t,void *,size_t);
+typedef struct pwl_ps4_binding_context {
+    /* Platform protected reader, code/context and bounce storage remain
+     * resident for every allocation/release. Never a plain candidate memcpy. */
+    pwl_ps4_kernel_read_fn read;
+    void *read_context;
+    uint64_t kernel_base, thread, root;
+} pwl_ps4_binding_context_t;
+
 /* Preparation-time kernel ABI, from the pinned ps4-kexec-common/kernel.h.
- * No production firmware binding is currently approved. Non-null pointers
- * alone do not authorize calls. A future verified adapter must also establish
- * a sleepable kernel context (M_NOWAIT does not remove internal VM locks).
- * No guessed offsets,
- * user mmap addresses, direct-map masks or kernel patches are used here.
+ * Checked binding supports the exact observed 13.52 build in its established
+ * preparation callback. Non-null pointers alone do not authorize calls. The
+ * platform must retain a sleepable context and pinned reader/code/state;
+ * M_NOWAIT does not remove internal VM locks. No user mmap address is treated
+ * as a physical allocation, and no kernel patch is applied by this backend.
  */
 typedef struct pwl_ps4_memory_api {
     void *kernel_map;
@@ -29,14 +38,23 @@ typedef struct pwl_ps4_memory_api {
     void (*free)(void *, pwl_ps4_vm_u64_t, pwl_ps4_vm_u64_t);
     pwl_ps4_vm_u64_t (*extract)(void *, pwl_ps4_vm_u64_t);
     uint32_t firmware; /* 0 is reserved for host fixtures, never a PS4 fallback. */
+    pwl_ps4_binding_context_t *binding;
 } pwl_ps4_memory_api_t;
 
 /* Clears output and refuses unsupported/unverified firmware WITHOUT reading
  * kernel memory, deriving a base, or resolving/calling candidate functions.
- * 13.52 remains unsupported until the evidence in PS4_1352_BINDING.md exists.
+ * This version-only interface intentionally cannot activate the checked path.
  * Do not rebind an API that owns a live arena; the arena retains its own copy.
  */
 pwl_status_t pwl_ps4_memory_bind(uint32_t firmware, pwl_ps4_memory_api_t *api);
+/* Same-build 13.52 binding in the actual kernel callback. Captures live CPU,
+ * LSTAR/thread/root; protected-reads immutable signatures and mutable map,
+ * root/counter state before converting symbols to calls. Context starts with
+ * only reader fields set; failure preserves it and clears api. The reader's
+ * bootstrap, residency and fault recovery are platform contracts. This does
+ * not enable a CPU switch, provide inventory or perform any allocation. */
+pwl_status_t pwl_ps4_memory_bind_checked(uint32_t firmware,
+    pwl_ps4_binding_context_t *context,pwl_ps4_memory_api_t *api);
 pwl_status_t pwl_ps4_memory_api_validate(const pwl_ps4_memory_api_t *api);
 
 typedef struct pwl_ps4_arena {
@@ -56,7 +74,8 @@ typedef struct pwl_owned_span {
 /* arena must initially be zero and must not be copied while owning memory.
  * Exactly one M_NOWAIT allocation attempt (not a lock-free callback).
  * Every 4 KiB hardware page is checked using pmap_extract, while the original
- * 16 KiB VM allocation is kept alive. Failure frees it using its original KVA.
+ * 16 KiB VM allocation is kept alive. Bad PA results free a valid original KVA;
+ * a malformed returned KVA is retained and never passed to guessed cleanup.
  * Physical backing below 1 MiB is excluded. This acquires an owned RAM extent,
  * not the platform's complete RAM/MMIO map.
  */

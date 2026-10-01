@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 output=${1:-build/native-core}
 mkdir -p "$output"
-for unit in main acpi acpi_configuration native_acpi native_call entry_pipeline table_snapshot efi_entry boot_source native_transition alias_map transition_map exception_context pe_loader handoff paging root_clone cpu_state ps4_binding ps4_memory firmware_memory firmware_files firmware_media efi_tables graphics resident_workspace resident_selftest native_workspace freestanding; do
+for unit in main acpi acpi_configuration native_acpi native_call entry_pipeline table_snapshot efi_entry boot_source native_transition alias_map transition_map exception_context pe_loader handoff paging root_clone cpu_state ps4_binding ps4_profile ps4_reader ps4_memory firmware_memory firmware_files firmware_media efi_tables graphics resident_workspace resident_selftest native_workspace freestanding; do
     "$compiler" -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
         -ffreestanding -fno-builtin -fno-stack-protector -fno-common \
         -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -fPIE \
@@ -19,7 +19,7 @@ done
 "$compiler" -c -m64 loader/src/native_call.S -o "$output/native_call_asm.o"
 python3 tools/check_native_call.py "$output/native_call_asm.o"
 ld -r "$output/acpi_configuration.o" "$output/acpi.o" "$output/native_acpi.o" "$output/native_call.o" "$output/native_call_asm.o" "$output/root_clone.o" "$output/table_snapshot_io.o" "$output/address_call.o" "$output/efi_entry_call.o" "$output/entry_pipeline.o" "$output/table_snapshot.o" "$output/efi_entry.o" "$output/main.o" "$output/boot_source.o" "$output/native_transition.o" "$output/alias_map.o" "$output/transition_map.o" "$output/exception_context.o" "$output/pe_loader.o" "$output/handoff.o" "$output/paging.o" "$output/cpu_state.o" \
-    "$output/ps4_binding.o" "$output/ps4_memory.o" "$output/firmware_memory.o" "$output/firmware_files.o" "$output/firmware_media.o" \
+    "$output/ps4_reader.o" "$output/ps4_profile.o" "$output/ps4_binding.o" "$output/ps4_memory.o" "$output/firmware_memory.o" "$output/firmware_files.o" "$output/firmware_media.o" \
     "$output/efi_tables.o" "$output/graphics.o" "$output/resident_workspace.o" "$output/resident_selftest.o" "$output/native_workspace.o" "$output/freestanding.o" -o "$output/ps4wl-native-core.o"
 nm -u "$output/ps4wl-native-core.o" > "$output/UNDEFINED-SYMBOLS.txt"
 if [ -s "$output/UNDEFINED-SYMBOLS.txt" ]; then

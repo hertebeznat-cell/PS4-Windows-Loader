@@ -41,7 +41,8 @@ a larger owned arena, resident code/data copies, EFI tables and independent
 page tables, then freed it and returned. The next
 [resident process call test](docs/RESIDENT_CALLS.md) checks nine actual callback
 entries from copied RX code with synthetic descriptors. Neither activates CR3
-or enters Microsoft code. Production memory binding still refuses calls.
+or enters Microsoft code. The separate checked production preparation path is
+described below; its successful live binding has not been tested on PS4.
 Do not repeat the completed preparation tests.
 
 ## Where it stands
@@ -162,10 +163,10 @@ The [owned-memory backend and resident firmware substrate](docs/NATIVE_BACKEND.m
 now connects a kernel allocation adapter, per-page physical verification,
 resident firmware/media copies, an autonomous memory manager, and independent
 page tables in one preparation transaction. Host integration tests cover the
-pipeline and rollback. An [enforced binding gate and source audit](docs/PS4_1352_BINDING.md) now reject
-unverified kernel calls, including the upstream 13.52 candidates. Exact ABI
-types and release ownership are checked in CI. Verified firmware 13.52 binding,
-a complete platform map,
+pipeline and rollback. A [checked binding and source audit](docs/PS4_1352_BINDING.md)
+now validate the exact supplied 13.52 build, live context and memory symbols
+before production calls. Exact ABI types and release ownership are checked in
+CI. Successful live production binding, a complete platform map,
 EFI protocol installation and CPU/device handoff remain unresolved. The new
 `PS4-Windows-Loader-Native-Core` artifact is a relocatable development object,
 **not a console payload**. No new console test is requested.
@@ -357,11 +358,12 @@ real framebuffer is provided and verified in the final root. Native host tests
 execute copied RX services and relocated PE fixtures; no emulator or Microsoft
 code runs in those tests.
 
-**A full native PS4 launch is not ready.** The console main entry remains
-preflight; production binding, complete memory/device inventory, CPU/exception/FP
+**A full native PS4 launch is not ready.** Stage 4.8 remains preflight. A separate
+Native-Prepare entry connects USB input and checked production binding to
+resident image preparation; its live execution is untested. Complete memory/device inventory, CPU/exception/FP
 ownership, AP/DMA handoff, actual video capture, runtime/platform services and
 ExitBootServices are still incomplete. Existing successful console tests do not
-prove those inputs. No new boot binary or repeated console test is proposed.
+prove those inputs. The preparation BIN does not launch Boot Manager. No repeated console test is proposed.
 See [RESIDENT_IMAGES](docs/RESIDENT_IMAGES.md),
 [RESIDENT_GRAPHICS](docs/RESIDENT_GRAPHICS.md) and the exact
 [remaining launch requirements](docs/NATIVE_LAUNCH_STATUS.md).
@@ -377,7 +379,7 @@ Native host tests exercise the shared FXSAVE/XSAVE primitives and copied CPL3
 refusal before reads. Page-table transaction tests exercise construction and
 rollback. No emulator is used and no host CR3 change is claimed.
 
-The console entry and production binding remain unconnected/refused. Complete
+The returning CPU call remains disconnected from console activation. Complete
 exception/FP/AP/DMA ownership, inventory, video and runtime/platform services
 remain missing. This change does not provide a complete boot BIN or request
 another console probe. See [returning native call](docs/NATIVE_RETURNING_CALL.md).
@@ -396,5 +398,28 @@ Native tests cover both RSDP revisions, corrupt/changed/out-of-range data,
 preferred extended pointers, publication rollback, reservations and coexistence
 with the fixed graphics console. No emulator is used. This implements table
 capture/publication, not PS4 table discovery, complete Windows-compatible AML,
-source RAM pinning, or device handoff. Console main remains unconnected; no
+source RAM pinning, or device handoff. Console CPU activation remains unconnected; no
 new boot binary or console test is requested. See [ACPI preparation](docs/NATIVE_ACPI.md).
+
+## Checked console preparation · 1 October 2026
+
+`PS4WindowsLoader-Native-Prepare.bin` now reads and validates `PWL_BOOT.PAK`
+from USB, pins the callback image/archive/reader buffers, verifies the exact
+installed 13.52 build and live thread/root, and connects those results to native
+Boot Manager preparation. It copies and relocates the application and resident
+services, builds inactive tables, audits the environment, then releases the
+original KVA. Allocation and cleanup repeat the binding checks; malformed
+owners are retained rather than passed to free.
+
+The protected reader uses the existing same-build copyout ABI exercised by the
+provided private kernel capture. Its bootstrap and current GS thread/PCB layout
+are explicit assumptions, not support for arbitrary firmware builds. Host tests
+cover profile corruption, read failure, changing state and actual CPL3 refusal.
+The raw console image includes zeroed BSS and requires no dynamic relocations.
+CI publishes it separately from Native-Core and the old Stage 4.8 build.
+
+This entry has not been run on PS4. It does not invoke Microsoft code, activate
+tables or hand off devices; stage 5 means preparation/audit/cleanup only. No
+repeat of the completed probes is requested. See
+[checked console preparation](docs/PS4_NATIVE_PREPARATION.md) and
+[remaining launch requirements](docs/NATIVE_LAUNCH_STATUS.md).

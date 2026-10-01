@@ -11,7 +11,7 @@ sh tools/build_resident.sh
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -Iloader/include -Ibuild/resident \
  -DPWL_PS4_MEMORY_HOST_TEST -DPWL_TEST_STACK \
  loader/src/main.c loader/src/pe_loader.c loader/src/paging.c \
- loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
+ loader/src/ps4_reader.c loader/src/ps4_profile.c loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
  loader/src/native_workspace.c loader/src/acpi.c loader/src/acpi_configuration.c loader/src/transition_map.c loader/src/graphics.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
  loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
  loader/src/stack_call.S tests/test_resident_services.c -o build/test-resident-stack

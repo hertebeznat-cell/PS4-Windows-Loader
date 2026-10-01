@@ -1,9 +1,11 @@
 # Owned-memory backend and resident firmware substrate
 
 Status: implementation with host integration tests, **not hardware validated**.
-Production memory calls are now blocked by an executable binding gate; firmware
-13.52 remains unverified. See the [binding audit](PS4_1352_BINDING.md) for exact
-missing evidence and public-source provenance. There is no new console payload. Stage 4.8 remains preflight.
+Production memory calls now use a checked binding for the exact supplied 13.52
+build. Its live reader, successful production binding and new console entry
+have not been hardware validated. See the [binding audit](PS4_1352_BINDING.md)
+and [console preparation entry](PS4_NATIVE_PREPARATION.md) for the bootstrap
+assumptions and lifetime requirements. Stage 4.8 remains preflight.
 Do not send `ps4wl-native-core.o` to a console: it is a relocatable development
 object, without a console entry point or a complete platform activation layer.
 It now contains a controlled returning CPU transition and its preparation API,
@@ -34,21 +36,25 @@ The workspace now optionally maps and relocates an AMD64 EFI application into
 its own arena and includes image-section permissions in the independent page
 tables. See [Native PE loader](NATIVE_PE_LOADER.md) for the API, restrictions
 and tests. This prepares image bytes and mappings, without entering the image
-or bypassing the unverified 13.52 binding.
+and uses the checked binding in the separate console preparation entry.
 
 ## What is now implemented
 
 `loader/src/ps4_memory.c` uses the actual kernel allocator ABI described by the
 pinned runtime: `kmem_alloc_contig`, `pmap_extract` and `kmem_free`. Its API describes
 resolved kernel symbols, the dereferenced `kernel_map` and `kernel_pmap_store`,
-but non-null pointers no longer authorize calls. `ps4_binding.c` refuses every
-production profile until target verification exists. Only a host-test build can
-exercise the allocator with synthetic callbacks. The allocator makes one
+but non-null pointers do not authorize calls. `ps4_binding.c` captures actual
+CPL0/thread/root state and verifies installed-build signatures, maps and counters
+through a protected reader before enabling the supplied 13.52 profile. It
+revalidates the binding before allocation and release. The version-only binder
+still refuses. Host tests use separate synthetic callbacks and cannot establish
+successful production binding. The allocator makes one
 `M_NOWAIT | M_ZERO` call with 16 KiB alignment, asks for WB memory between
 1 MiB and the low canonical identity limit, and checks
 both ends of every 4 KiB hardware page. It preserves the original allocation KVA
 and its size for release. Physical addresses are never synthesized from a KVA.
-Validation failure releases the original allocation; no backend retry loop or
+Invalid physical translations release the valid original KVA. A malformed KVA
+is retained for diagnosis and is never rounded or passed to free. No backend retry loop or
 kernel patch is used. M_NOWAIT does not eliminate internal VM locks/retries.
 The allocation remains owned until an explicit preparation-side release.
 
@@ -109,7 +115,10 @@ Windows post-ExitBootServices storage driver. A boot medium larger than the
 reserved arena needs a native device path/driver or another justified design;
 the process USB file descriptor cannot remain the backing store.
 
-## Pinned runtime findings and unresolved target binding
+## Historical pinned-runtime source audit
+
+These findings describe upstream sources before the supplied installed-build
+capture and diagnostics were incorporated into the checked binding.
 
 Audited runtime commit:
 [`f70f43a60a973b3662daeb29c1f115d95408db93`](https://github.com/ps4-linux/ps4-linux-loader/tree/f70f43a60a973b3662daeb29c1f115d95408db93).
@@ -137,9 +146,9 @@ Audited runtime commit:
 - `acpi.c` rewrites tables for the Linux path at assumed physical addresses.
   Copying those assumptions would not establish valid Windows ACPI on Baikal.
 
-The immediate blocker to running this backend on the PS4 is the absence of a
-verified kernel-symbol binding and preparation-context contract on firmware
-13.52. Beyond it, the independent blockers are a trustworthy RAM/MMIO inventory,
+The checked installed-build implementation now addresses symbol binding and
+connects a preparation-only console entry. Its successful live operation remains
+untested. Independent launch blockers are a trustworthy RAM/MMIO inventory,
 complete resident EFI tables/protocols and firmware relocation, a recoverable native
 CPU/exception context, AP/IRQ/device/DMA ownership, validated ACPI and Windows
 storage/device support. The photographed CR3 cannot establish any of these.
@@ -275,7 +284,7 @@ Reference: [UEFI protocol handler services](https://uefi.org/specs/UEFI/2.10_A/0
 
 ## Preparation source transaction
 
-The bounded archive reader now connects preparation-side I/O to `pwl_native_boot_prepare()`, with partial-read handling, close-before-preparation and staging-buffer cleanup. The pinned SDK adapter compiles separately from the syscall-free core. See [boot source](BOOT_SOURCE.md). Production binding and CPU entry remain unavailable; the historical baseline table above describes the old Stage 4.8 path.
+The bounded archive reader now connects preparation-side I/O to `pwl_native_boot_prepare()`, with partial-read handling, close-before-preparation and staging-buffer cleanup. The pinned SDK adapter compiles separately from the syscall-free core. See [boot source](BOOT_SOURCE.md). The separate [checked console preparation entry](PS4_NATIVE_PREPARATION.md) now uses the installed-build production binding; CPU activation remains unavailable. The historical baseline table above describes the old Stage 4.8 path.
 
 ## Original ACPI publication
 
