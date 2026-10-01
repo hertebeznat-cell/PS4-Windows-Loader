@@ -326,3 +326,7 @@ The console page-reader adapter is included in the native development core,
 checking physical translations at both page endpoints and CR3 before/after reads.
 Its capture entry connects to the full table collector. It has not yet run on
 PS4 and does not establish snapshot quiescence or launch Windows.
+The supplied complete EFI tree was audited: its real bootmgfw.efi passes native
+PE copy/relocation above 4 GiB, and bootx64.efi is identical. The file archive
+limit was raised from 128 to 256 records to retain all 197 records (148 files).
+See [EFI_ARCHIVE_AUDIT](docs/EFI_ARCHIVE_AUDIT.md). No Microsoft code was executed.

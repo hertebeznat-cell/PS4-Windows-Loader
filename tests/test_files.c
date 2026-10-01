@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 static unsigned char archive[4096];
 static void put32(unsigned char *p,uint32_t n) { for (unsigned i=0;i<4;i++) p[i]=(unsigned char)(n>>(8*i)); }
 static void put64(unsigned char *p,uint64_t n) { for (unsigned i=0;i<8;i++) p[i]=(unsigned char)(n>>(8*i)); }
@@ -52,5 +53,19 @@ int main(void)
     assert(pwl_files_validate(archive,sizeof(archive))==PWL_ERR_BAD_IMAGE);
     fixture();
     for (size_t i=0;i<sizeof(archive);i++) assert(pwl_files_validate(archive,i)!=PWL_OK);
+    size_t full_bytes=24+PWL_FILES_MAX*536;
+    unsigned char *full=calloc(1,full_bytes);assert(full);
+    memcpy(full,"PWLFILES",8);put32(full+8,1);put32(full+12,PWL_FILES_MAX);put64(full+16,full_bytes);
+    for(unsigned i=0;i<PWL_FILES_MAX;i++) {
+        unsigned char *r=full+24+i*536;
+        char name[32];if(i)snprintf(name,sizeof(name),"\\F%03u",i);else strcpy(name,"\\");
+        for(size_t j=0;name[j];j++)r[j*2]=(unsigned char)name[j];
+        put64(r+512,full_bytes);if(!i)put32(r+528,1);
+    }
+    assert(pwl_files_validate(full,full_bytes)==PWL_OK);
+    uint16_t last[]={'\\','F','2','5','5',0};
+    assert(pwl_files_open(full,full_bytes,last,&f)==PWL_EFI_SUCCESS && f.index==255);
+    put32(full+12,PWL_FILES_MAX+1);
+    assert(pwl_files_validate(full,full_bytes)==PWL_ERR_BAD_IMAGE);free(full);
     puts("resident files: hierarchy, case lookup, partial reads, EOF and malformed archives passed");
 }

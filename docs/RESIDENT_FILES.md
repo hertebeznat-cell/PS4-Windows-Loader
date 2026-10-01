@@ -26,7 +26,7 @@ python3 tools/pack_boot_files.py BOOT_FILES_DIRECTORY build/boot-files.bin
 The output must be outside the source directory. The tool preserves the
 hierarchy, UTF-16 names and file bytes, includes the root/parent directories,
 rejects symlinks and ASCII case duplicates, and produces deterministic data
-padded to 512 bytes. At most 128 directory/file records and 255 UTF-16 path
+padded to 512 bytes. At most 256 directory/file records and 255 UTF-16 path
 code units are supported. Proprietary boot files are supplied by the user and
 are not added to this repository.
 

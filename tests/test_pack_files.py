@@ -40,4 +40,14 @@ with tempfile.TemporaryDirectory() as directory:
         raise AssertionError('symlink accepted')
     except ValueError:
         pass
+with tempfile.TemporaryDirectory() as directory:
+    base=Path(directory);source=base/'source';source.mkdir()
+    for i in range(255): (source/f'file{i:03d}').write_bytes(bytes([i]))
+    count,size=module.pack(source,base/'maximum.bin')
+    assert count==256
+    (source/'extra').write_bytes(b'x')
+    try:
+        module.pack(source,base/'overflow.bin')
+        raise AssertionError('257 records accepted')
+    except ValueError: pass
 print('file packer: deterministic hierarchy, contents and invalid input refusal passed')

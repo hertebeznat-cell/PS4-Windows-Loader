@@ -11,8 +11,8 @@ def pack(root, output):
     if output.resolve().is_relative_to(root):
         raise ValueError('output must be outside the input directory')
     paths = [root] + sorted(root.rglob('*'), key=lambda p: str(p.relative_to(root)).casefold())
-    if len(paths) > 128:
-        raise ValueError('archive supports at most 128 files and directories')
+    if len(paths) > 256:
+        raise ValueError('archive supports at most 256 files and directories')
     records = []
     contents = []
     seen = set()

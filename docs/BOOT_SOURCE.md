@@ -22,7 +22,7 @@ Place that archive on the USB. Preserve paths inside the selected directory;
 for a normal Microsoft EFI tree the selected application path is
 `\EFI\Microsoft\Boot\bootmgfw.efi`. Include the needed BCD, fonts and related
 resources; archive presence does not demonstrate that Boot Manager can use them.
-The current archive capacity is 128 files/directories. No Microsoft files are
+The current archive capacity is 256 files/directories. No Microsoft files are
 supplied or downloaded by this project.
 
 The transaction rejects oversized/non-block-aligned files before allocating

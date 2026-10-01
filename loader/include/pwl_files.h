@@ -1,7 +1,7 @@
 #ifndef PWL_FILES_H
 #define PWL_FILES_H
 #include "pwl_firmware.h"
-#define PWL_FILES_MAX 128U
+#define PWL_FILES_MAX 256U
 #define PWL_FILES_PATH 256U
 #define PWL_FILES_HEADER 24U
 #define PWL_FILES_RECORD 536U
