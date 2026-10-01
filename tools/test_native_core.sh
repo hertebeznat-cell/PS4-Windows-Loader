@@ -18,6 +18,12 @@ sh tools/build_resident.sh
     loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
     tests/test_resident_services.c -o build/test-resident-services
 ./build/test-resident-services
+for unit in variables timers; do
+    "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+        -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+        loader/src/efi_tables.c "tests/test_resident_$unit.c" -o "build/test-resident-$unit"
+    "./build/test-resident-$unit"
+done
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/efi_tables.c tests/test_efi_tables.c -o build/test-efi-tables

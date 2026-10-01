@@ -41,12 +41,14 @@ still cover only the supported query modes; this adds no driver binding,
 controller ownership or protocol-install notification registration. Searches
 by notification registration key still return EFI_UNSUPPORTED.
 
-There is no platform timer, hardware idle source or asynchronous event producer.
-WaitForEvent repeatedly polls wait-notify callbacks, using PAUSE between scans;
-an unsignaled event without a producer can wait indefinitely. It does not return
-a fabricated timeout. Timer event types, automatic ExitBootServices and virtual
-address change event types remain unsupported. Explicit GUID groups do not
-provide automatic platform lifecycle signaling. Runtime Services, the persistent
+WaitForEvent repeatedly polls wait-notify callbacks and conditionally calibrated
+TSC timers, using PAUSE between scans; an unsignaled event without a producer can
+wait indefinitely. It does not return a fabricated timeout. There is no hardware
+idle or asynchronous interrupt-driven event producer. Timer arming requires a
+trusted clock calibration; see [variables and timers](RESIDENT_VARIABLES_TIMERS.md).
+Automatic ExitBootServices and virtual address change event types remain unsupported.
+Explicit GUID groups do not provide automatic platform lifecycle signaling.
+Complete Runtime Services, the persistent
 monotonic-counter seed, console protocols, child image execution and platform
 handoff remain incomplete; ExitBootServices still refuses execution.
 
@@ -56,10 +58,11 @@ Notification functions and their contexts are caller-provided pointers and must
 stay mapped in the native address space for their complete lifetime. No pointer
 to a host process service is introduced by this module.
 
-The image exports 41 linked entries, retaining offsets 0..30, including the
+The image exports 48 linked entries, retaining offsets 0..30, including the
 error adapter at 30. New events are 31..36 and discovery/configuration methods
-are 37..40. There are 29 dedicated Boot table destinations (including the
-existing ExitBootServices refusal), 14 generic error destinations and one null
+are 37..40. Variable methods are 41..44 and timer/delay/watchdog-disable are 45..47.
+There are 32 dedicated Boot table destinations (including the
+existing ExitBootServices refusal), 11 generic error destinations and one null
 Reserved field. The previous All30 mask and hardware evidence remain unchanged;
 they do not validate these new entries on PS4.
 

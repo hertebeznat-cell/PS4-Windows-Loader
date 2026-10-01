@@ -39,7 +39,9 @@ names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'file_get_position', 'file_set_position', 'file_get_info', 'file_set_info', 'file_flush',
          'open_protocol', 'close_protocol', 'unsupported', 'create_event', 'signal_event', 'close_event',
          'check_event', 'create_event_ex', 'wait_for_event', 'locate_handle_buffer', 'protocols_per_handle',
-         'open_protocol_information', 'install_configuration_table']
+         'open_protocol_information', 'install_configuration_table', 'get_variable',
+         'get_next_variable_name', 'set_variable', 'query_variable_info', 'set_timer', 'stall',
+         'set_watchdog_timer']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()

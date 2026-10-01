@@ -20,6 +20,17 @@ int main(void)
     assert(t.boot.functions[43]==s.code_pa+35*16);
     const unsigned event_slots[]={7,10,11,12,43,9,36,35,34,21};
     for(size_t i=0;i<10;i++)assert(t.boot.functions[event_slots[i]]==s.code_pa+(31+i)*16);
+    assert(!t.system.runtime_services); /* Platform runtime is deliberately unpublished. */
+    assert(t.runtime.header.signature==UINT64_C(0x56524553544e5552));
+    assert(t.runtime.header.header_size==136);
+    const unsigned variable_slots[]={6,7,8,13};
+    for(size_t i=0;i<PWL_EFI_RUNTIME_SLOTS;i++)assert(i==10 ? !t.runtime.functions[i] : t.runtime.functions[i]);
+    for(size_t i=0;i<4;i++)assert(t.runtime.functions[variable_slots[i]]==s.code_pa+(41+i)*16);
+    assert(t.boot.functions[8]==s.code_pa+45*16);
+    assert(t.boot.functions[28]==s.code_pa+46*16);
+    assert(t.boot.functions[29]==s.code_pa+47*16);
+    pwl_efi_runtime_table_t runtime=t.runtime;runtime.header.crc32=0;
+    assert(pwl_efi_crc32(&runtime,sizeof(runtime))==t.runtime.header.crc32);
     assert(t.system.boot_services == s.data_pa+120);
     assert(t.boot.functions[26] == s.code_pa+80);
     assert(t.boot.functions[40] == s.code_pa+96);

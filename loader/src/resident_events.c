@@ -4,6 +4,7 @@
 extern const uint64_t pwl_resident_binding __attribute__((visibility("hidden")));
 static pwl_resident_data_t *state(void)
 { return (pwl_resident_data_t *)(uintptr_t)pwl_resident_binding; }
+static uint64_t timers_poll(pwl_resident_data_t *d);
 
 /* Serialized, boot-only software events. No host clock, interrupts or process
  * services are used. Handles are monotonically assigned opaque values, never
@@ -42,6 +43,7 @@ static uint64_t dequeue(pwl_resident_data_t *d,unsigned q,unsigned index)
 void pwl_resident_events_dispatch(pwl_resident_data_t *d)
 {
     if (!d || d->memory.exited) return;
+    (void)timers_poll(d);
     uint64_t floor=d->tpl;
     for (;;) {
         unsigned q;
@@ -53,7 +55,7 @@ void pwl_resident_events_dispatch(pwl_resident_data_t *d)
         if (!e) continue;
         pwl_efi_event_notify_t notify=e->notify;
         const void *context=e->context;
-        if (e->type==PWL_EVT_NOTIFY_SIGNAL) e->signaled=0;
+        if (e->type&PWL_EVT_NOTIFY_SIGNAL) e->signaled=0;
         d->tpl=q ? 16 : 8;
         /* A callback may close/recreate this slot or signal higher-priority
          * events. Do not access e after the call. Nested dispatch only runs
@@ -71,13 +73,14 @@ uint64_t EFI pwl_resident_create_event_ex(uint32_t type,uint64_t tpl,
     if (!d || !event) return PWL_EFI_INVALID_PARAMETER;
     if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
     switch (type) {
-    case 0: case PWL_EVT_NOTIFY_WAIT: case PWL_EVT_NOTIFY_SIGNAL: break;
-    case UINT32_C(0x80000000): case UINT32_C(0x80000100): case UINT32_C(0x80000200):
+    case 0: case PWL_EVT_NOTIFY_WAIT: case PWL_EVT_NOTIFY_SIGNAL:
+    case UINT32_C(0x80000000): case UINT32_C(0x80000100): case UINT32_C(0x80000200): break;
     case UINT32_C(0x201): case UINT32_C(0x60000202):
-        return PWL_EFI_UNSUPPORTED; /* Timer/runtime/automatic platform events. */
+        return PWL_EFI_UNSUPPORTED; /* Runtime/automatic platform events. */
     default: return PWL_EFI_INVALID_PARAMETER;
     }
-    if (type && (!notify || (tpl!=8 && tpl!=16))) return PWL_EFI_INVALID_PARAMETER;
+    uint32_t notification=type&(PWL_EVT_NOTIFY_WAIT|PWL_EVT_NOTIFY_SIGNAL);
+    if (notification && (!notify || (tpl!=8 && tpl!=16))) return PWL_EFI_INVALID_PARAMETER;
     if (d->event_next_handle==UINT64_MAX) return PWL_EFI_OUT_OF_RESOURCES;
     for (size_t i=0;i<PWL_RESIDENT_EVENTS;i++) {
         pwl_resident_event_t *e=&d->events[i];
@@ -88,7 +91,7 @@ uint64_t EFI pwl_resident_create_event_ex(uint32_t type,uint64_t tpl,
         e->handle=++d->event_next_handle;
         e->type=type;
         e->group=copy;e->grouped=group!=NULL;
-        if (type) { e->notify_tpl=tpl;e->notify=notify;e->context=context; }
+        if (notification) { e->notify_tpl=tpl;e->notify=notify;e->context=context; }
         *event=e->handle;
         return PWL_EFI_SUCCESS;
     }
@@ -102,16 +105,72 @@ static void signal_one(pwl_resident_data_t *d,pwl_resident_event_t *e)
 {
     if (e->signaled) return;
     e->signaled=1;
-    if (e->type==PWL_EVT_NOTIFY_SIGNAL) queue(d,e);
+    if (e->type&PWL_EVT_NOTIFY_SIGNAL) queue(d,e);
 }
-void pwl_resident_signal_group(pwl_resident_data_t *d,const pwl_efi_guid_t *group)
+static void mark_group(pwl_resident_data_t *d,const pwl_efi_guid_t *group)
 {
-    if (!d || !group || d->memory.exited) return;
     pwl_efi_guid_t copy=*group;
     for (size_t i=0;i<PWL_RESIDENT_EVENTS;i++)
         if (d->events[i].handle && d->events[i].grouped &&
             same_group(&d->events[i].group,&copy)) signal_one(d,&d->events[i]);
-    pwl_resident_events_dispatch(d);
+}
+void pwl_resident_signal_group(pwl_resident_data_t *d,const pwl_efi_guid_t *group)
+{
+    if (!d || !group || d->memory.exited) return;
+    mark_group(d,group);pwl_resident_events_dispatch(d);
+}
+static uint64_t timers_poll(pwl_resident_data_t *d)
+{
+    int active=0;
+    for (size_t i=0;i<PWL_RESIDENT_EVENTS;i++)
+        if (d->events[i].handle && d->events[i].timer_active) { active=1;break; }
+    if (!active) return PWL_EFI_SUCCESS;
+    uint64_t now;
+    uint64_t status=pwl_resident_clock_now(d,&now);
+    if (status) return status;
+    /* Update deadlines and mark groups before executing any callback. Missing
+     * periodic ticks coalesce into one signal; no callback catch-up storm. */
+    for (size_t i=0;i<PWL_RESIDENT_EVENTS;i++) {
+        pwl_resident_event_t *e=&d->events[i];
+        if (!e->handle || !e->timer_active || now<e->timer_deadline) continue;
+        if (!e->timer_period) e->timer_active=0;
+        else {
+            uint64_t steps=(now-e->timer_deadline)/e->timer_period+1;
+            if (steps>(UINT64_MAX-e->timer_deadline)/e->timer_period) e->timer_active=0;
+            else e->timer_deadline+=steps*e->timer_period;
+        }
+        if (e->grouped) mark_group(d,&e->group);
+        else signal_one(d,e);
+    }
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_set_timer(uint64_t handle,uint32_t kind,uint64_t trigger)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || kind>2) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_resident_event_t *e=find_event(d,handle);
+    if (!e || !(e->type&PWL_EVT_TIMER)) return PWL_EFI_INVALID_PARAMETER;
+    if (!kind) {
+        e->timer_active=0;e->timer_period=0;e->timer_deadline=0;
+        return PWL_EFI_SUCCESS; /* Preserve a signal already delivered/queued. */
+    }
+    uint64_t duration,now;
+    uint64_t status=pwl_resident_clock_ticks(d,trigger,10000000,&duration);
+    if (status) return status;
+    status=pwl_resident_clock_now(d,&now);
+    if (status) return status;
+    uint64_t period=duration;
+    if (!trigger) {
+        /* Zero delay means next timer tick, not synchronous callback delivery.
+         * The polled timer grid uses 1 ms ticks, rounded up to a TSC cycle. */
+        uint64_t tick=(d->clock.frequency_hz+999)/1000;
+        duration=tick-now%tick;period=tick;
+    }
+    if (now>UINT64_MAX-duration) return PWL_EFI_INVALID_PARAMETER;
+    e->timer_deadline=now+duration;e->timer_period=kind==1 ? period : 0;
+    e->timer_active=1;
+    return PWL_EFI_SUCCESS;
 }
 uint64_t EFI pwl_resident_signal_event(uint64_t handle)
 {
@@ -147,8 +206,13 @@ uint64_t EFI pwl_resident_check_event(uint64_t handle)
     if (!d) return PWL_EFI_INVALID_PARAMETER;
     if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
     pwl_resident_event_t *e=find_event(d,handle);
-    if (!e || e->type==PWL_EVT_NOTIFY_SIGNAL) return PWL_EFI_INVALID_PARAMETER;
-    if (!e->signaled && e->type==PWL_EVT_NOTIFY_WAIT) {
+    if (!e || (e->type&PWL_EVT_NOTIFY_SIGNAL)) return PWL_EFI_INVALID_PARAMETER;
+    uint64_t status=timers_poll(d);
+    if (status && (e->type&PWL_EVT_TIMER) && e->timer_active) return status;
+    pwl_resident_events_dispatch(d);
+    e=find_event(d,handle);
+    if (!e) return PWL_EFI_INVALID_PARAMETER;
+    if (!e->signaled && (e->type&PWL_EVT_NOTIFY_WAIT)) {
         queue(d,e);pwl_resident_events_dispatch(d);
         e=find_event(d,handle); /* Callback may have closed the event. */
         if (!e) return PWL_EFI_INVALID_PARAMETER;
@@ -163,9 +227,9 @@ uint64_t EFI pwl_resident_wait_for_event(size_t count,const uint64_t *events,siz
     if (!d || !count || !events || !index) return PWL_EFI_INVALID_PARAMETER;
     if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
     if (d->tpl!=4) return PWL_EFI_UNSUPPORTED;
-    /* Blocking cooperative polling, in array order. No fake timeout/NOT_READY
-     * return. Without a notification producer, an unsignaled event waits
-     * indefinitely, as specified. Hardware idle and timer sources are absent. */
+    /* Blocking cooperative polling, in array order, including calibrated TSC
+     * timer events. An unsignaled plain event with no producer still waits
+     * indefinitely. No process wait or hardware idle operation is used. */
     for (;;) {
         for (size_t i=0;i<count;i++) {
             uint64_t status=pwl_resident_check_event(events[i]);

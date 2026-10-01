@@ -3,14 +3,15 @@
 
 _Static_assert(sizeof(pwl_efi_header_t) == 24, "EFI header ABI");
 _Static_assert(sizeof(pwl_efi_system_table_t) == 120, "AMD64 System Table ABI");
+_Static_assert(sizeof(pwl_efi_runtime_table_t)==136,"AMD64 Runtime Services ABI");
 _Static_assert(sizeof(pwl_efi_boot_table_t) == 376, "AMD64 Boot Services ABI");
 _Static_assert(offsetof(pwl_efi_system_table_t, boot_services) == 96, "Boot Services offset");
 _Static_assert(offsetof(pwl_efi_boot_table_t, functions) == 24, "Boot Services slots");
 
 static const unsigned slots[PWL_EFI_BOOT_CALLBACKS] =
-    {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37,32,33,7,10,11,12,43,9,36,35,34,21};
+    {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37,32,33,7,10,11,12,43,9,36,35,34,21,8,28,29};
 static const unsigned callback_indices[PWL_EFI_BOOT_CALLBACKS] =
-    {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,28,29,31,32,33,34,35,36,37,38,39,40};
+    {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,28,29,31,32,33,34,35,36,37,38,39,40,45,46,47};
 
 uint32_t pwl_efi_crc32(const void *bytes, size_t size)
 {
@@ -54,6 +55,17 @@ pwl_status_t pwl_efi_tables_prepare(const pwl_efi_table_spec_t *s,
                                           0x00020000, sizeof(out->system), 0, 0};
     out->boot.header = (pwl_efi_header_t){UINT64_C(0x56524553544f4f42),
                                         0x00020000, sizeof(out->boot), 0, 0};
+    out->runtime.header=(pwl_efi_header_t){UINT64_C(0x56524553544e5552),
+        0x00020000,sizeof(out->runtime),0,0};
+    /* An unpublished preparation table. ResetSystem has a VOID/non-returning
+     * contract and cannot use the status-returning unsupported adapter. Keep
+     * it absent and do not publish SystemTable.RuntimeServices yet. */
+    for (size_t i=0;i<PWL_EFI_RUNTIME_SLOTS;i++)
+        if (i!=10) out->runtime.functions[i]=spec.code_pa+spec.callback_offsets[30];
+    const unsigned variable_slots[]={6,7,8,13};
+    for (size_t i=0;i<4;i++)
+        out->runtime.functions[variable_slots[i]]=spec.code_pa+spec.callback_offsets[41+i];
+    out->runtime.header.crc32=pwl_efi_crc32(&out->runtime,sizeof(out->runtime));
     out->system.boot_services = spec.data_pa + offsetof(pwl_efi_prepared_tables_t, boot);
     /* Preserve Reserved at slot 17 as NULL. Unsupported services have a real
      * ABI adapter so an attempted call returns an error instead of branching

@@ -332,12 +332,16 @@ limit was raised from 128 to 256 records to retain all 197 records (148 files).
 See [EFI_ARCHIVE_AUDIT](docs/EFI_ARCHIVE_AUDIT.md). No Microsoft code was executed.
 
 Unimplemented Boot Services now have a resident EFI_UNSUPPORTED adapter instead
-of null callable pointers; the reserved field stays zero. The image exports 41
+of null callable pointers; the reserved field stays zero. The image exports 48
 entry symbols, preserving the previous 30 callback indices. Ten new destinations
 implement software event creation/signaling/checking/closing/grouping/cooperative
 waiting, allocated protocol/handle/open-record queries, and configuration-table
-publication with CRC and group notification. Timer/runtime event types and
-automatic platform lifecycle signaling remain unsupported. See
+publication with CRC and group notification. Seven additional methods provide
+volatile boot-only variable storage, conditional TSC-polled timers, Stall and
+watchdog disable. The Runtime Services wire table is prepared but deliberately
+unpublished, and PS4 clock calibration is not captured automatically. Complete
+runtime/automatic lifecycle signaling and interrupt-driven timers remain absent. See
+[RESIDENT_VARIABLES_TIMERS](docs/RESIDENT_VARIABLES_TIMERS.md),
 [RESIDENT_EVENT_SERVICES](docs/RESIDENT_EVENT_SERVICES.md) and
 [BOOT_SERVICE_FALLBACK](docs/BOOT_SERVICE_FALLBACK.md). Missing runtime/console
 interfaces and the console transition still prevent a complete Boot Manager entry.

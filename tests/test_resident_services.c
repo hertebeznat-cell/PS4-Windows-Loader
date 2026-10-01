@@ -159,7 +159,8 @@ static void run_events(unsigned char *code,pwl_resident_data_t *d)
     assert(create(PWL_EVT_NOTIFY_SIGNAL,4,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
     assert(create(PWL_EVT_NOTIFY_SIGNAL,31,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
     assert(create(0x300,8,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
-    assert(create(0x80000200,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED && output==123);
+    assert(create(0x80000200,8,event_notify,NULL,&output)==0);
+    assert(close(output)==0);output=123;
     assert(create(0x201,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED);
     assert(create(0x60000202,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED);
     assert(create(0,0,NULL,NULL,NULL)==PWL_EFI_INVALID_PARAMETER);

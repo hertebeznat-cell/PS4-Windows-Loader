@@ -6,8 +6,9 @@
  * pointers. This is an incomplete preparation fixture, not callable firmware.
  */
 #define PWL_EFI_BOOT_SLOTS 44U
-#define PWL_EFI_PREPARED_CALLBACKS 41U
-#define PWL_EFI_BOOT_CALLBACKS 29U
+#define PWL_EFI_PREPARED_CALLBACKS 48U
+#define PWL_EFI_RUNTIME_SLOTS 14U
+#define PWL_EFI_BOOT_CALLBACKS 32U
 typedef struct pwl_efi_header {
     uint64_t signature;
     uint32_t revision, header_size, crc32, reserved;
@@ -26,9 +27,14 @@ typedef struct pwl_efi_boot_table {
     pwl_efi_header_t header;
     uint64_t functions[PWL_EFI_BOOT_SLOTS];
 } pwl_efi_boot_table_t;
+typedef struct pwl_efi_runtime_table {
+    pwl_efi_header_t header;
+    uint64_t functions[PWL_EFI_RUNTIME_SLOTS];
+} pwl_efi_runtime_table_t;
 typedef struct pwl_efi_prepared_tables {
     pwl_efi_system_table_t system;
     pwl_efi_boot_table_t boot;
+    pwl_efi_runtime_table_t runtime; /* Unpublished until platform runtime is complete. */
 } pwl_efi_prepared_tables_t;
 /* Offsets in order: RaiseTPL, RestoreTPL, AllocatePages, FreePages,
  * GetMemoryMap, ExitBootServices, CalculateCrc32, CopyMem, SetMem,
@@ -43,6 +49,9 @@ typedef struct pwl_efi_prepared_tables {
  * CreateEventEx, WaitForEvent (cooperative, non-timer events).
  * Offsets 37..40: LocateHandleBuffer, ProtocolsPerHandle,
  * OpenProtocolInformation, InstallConfigurationTable.
+ * Offsets 41..44: GetVariable, GetNextVariableName, SetVariable,
+ * QueryVariableInfo (volatile boot-only storage; Runtime table unpublished).
+ * Offsets 45..47: SetTimer, Stall, SetWatchdogTimer (disable only).
  * Caller must independently establish code provenance, relocations and ABI.
  */
 typedef struct pwl_efi_table_spec {

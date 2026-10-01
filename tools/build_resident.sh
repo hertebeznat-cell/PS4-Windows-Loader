@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 out=build/resident
 mkdir -p "$out"
-for unit in resident_services resident_events firmware_memory firmware_files efi_tables; do
+for unit in resident_services resident_events resident_clock resident_variables firmware_memory firmware_files efi_tables; do
     "$compiler" -std=c11 -Os -Wall -Wextra -Wpedantic -Werror \
       -ffreestanding -fno-builtin -fno-stack-protector -fno-common \
       -fno-asynchronous-unwind-tables \
@@ -31,7 +31,10 @@ ld --no-undefined --no-relax --gc-sections -T loader/resident.ld \
   -u pwl_resident_check_event -u pwl_resident_create_event_ex -u pwl_resident_wait_for_event \
   -u pwl_resident_locate_handle_buffer -u pwl_resident_protocols_per_handle \
   -u pwl_resident_open_protocol_information -u pwl_resident_install_configuration_table \
-  "$out/resident_events.o" "$out/firmware_files.o" "$out/resident_services.o" "$out/firmware_memory.o" "$out/efi_tables.o" \
+  -u pwl_resident_get_variable -u pwl_resident_get_next_variable_name \
+  -u pwl_resident_set_variable -u pwl_resident_query_variable_info \
+  -u pwl_resident_set_timer -u pwl_resident_stall -u pwl_resident_set_watchdog_timer \
+  "$out/resident_clock.o" "$out/resident_variables.o" "$out/resident_events.o" "$out/firmware_files.o" "$out/resident_services.o" "$out/firmware_memory.o" "$out/efi_tables.o" \
   "$out/binding.o" -o "$out/resident.elf"
 objcopy -O binary "$out/resident.elf" "$out/resident.bin"
 objdump -d "$out/resident.elf" > "$out/DISASSEMBLY.txt"
