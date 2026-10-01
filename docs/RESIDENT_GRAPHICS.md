@@ -30,7 +30,9 @@ coordinates, byte stride and buffer arithmetic, translates RGB/BGR channels,
 and leaves pitch padding untouched. A BLT buffer aliasing video memory is
 refused for buffer transfers; use VideoToVideo for video overlap. The caller
 owns sufficient accessible BLT-buffer memory, as the EFI API has no buffer-size
-argument. The framebuffer uses volatile accesses.
+argument. The framebuffer uses volatile accesses and SFENCE after write
+operations, including clear/cursor/text/scroll, so WC stores are drained before
+the protocol reports completion. This is not a GPU command/completion fence.
 
 SimpleTextOutput supplies mode 0 at 80x25, a double-height 8x8 Basic Latin font,
 foreground/background EFI colors, clearing, reset, cursor positioning/visibility,

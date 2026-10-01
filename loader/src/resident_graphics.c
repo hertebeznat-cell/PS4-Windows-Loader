@@ -24,6 +24,8 @@ static void write_pixel(const pwl_resident_graphics_t *g,size_t x,size_t y,uint3
 }
 static int video_rect(const pwl_resident_graphics_t *g,size_t x,size_t y,size_t w,size_t h)
 { return x<g->info.width && y<g->info.height && w<=g->info.width-x && h<=g->info.height-y; }
+static void flush_pixels(void)
+{ __asm__ volatile("sfence":::"memory"); }
 uint64_t EFI pwl_resident_gop_query(void *self,uint32_t mode,size_t *bytes,pwl_graphics_info_t **info)
 {
     pwl_resident_graphics_t *g=graphics(self,0);pwl_resident_data_t *d=state();
@@ -40,11 +42,13 @@ static void cursor(pwl_resident_graphics_t *g,unsigned draw)
     size_t x=(size_t)g->text_mode.column*8,y=(size_t)g->text_mode.row*16+15;
     for (size_t i=0;i<8;i++) write_pixel(g,x+i,y,read_pixel(g,x+i,y)^0xffffff);
     g->cursor_drawn=draw;
+    flush_pixels();
 }
 static void clear(pwl_resident_graphics_t *g,uint32_t color)
 {
     for (size_t y=0;y<g->info.height;y++) for (size_t x=0;x<g->info.width;x++) write_pixel(g,x,y,color);
     g->text_mode.column=0;g->text_mode.row=0;g->cursor_drawn=0;
+    flush_pixels();
 }
 uint64_t EFI pwl_resident_gop_set(void *self,uint32_t mode)
 {
@@ -91,6 +95,7 @@ uint64_t EFI pwl_resident_gop_blt(void *self,uint32_t *buffer,unsigned operation
             }
         }
     }
+    if (operation!=1) flush_pixels();
     return PWL_EFI_SUCCESS;
 }
 static const uint32_t colors[16]={0,0x0000aa,0x00aa00,0x00aaaa,0xaa0000,0xaa00aa,0xaaaa00,0xaaaaaa,
@@ -157,6 +162,7 @@ static void scroll(pwl_resident_graphics_t *g)
     uint32_t bg=colors[(unsigned)g->text_mode.attribute>>4];
     for (size_t y=384;y<400;y++) for (size_t x=0;x<640;x++) write_pixel(g,x,y,bg);
     g->text_mode.row=24;
+    flush_pixels();
 }
 uint64_t EFI pwl_resident_text_output(void *self,const uint16_t *string)
 {
@@ -181,6 +187,7 @@ uint64_t EFI pwl_resident_text_output(void *self,const uint16_t *string)
         }
         if (g->text_mode.row==25) scroll(g);
     }
+    flush_pixels();
     if (g->text_mode.cursor_visible) cursor(g,1);
     return result;
 }
