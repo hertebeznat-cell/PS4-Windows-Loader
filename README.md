@@ -313,3 +313,8 @@ with explicit high-address dependencies in a separate root, preserving the old
 workspace and checking each dependency against old/new table snapshots. It does
 not activate that root; complete live dependency capture and firmware ownership
 of the second table span are still required.
+The independent plan can now prepare audited EFI entry arguments, with a copied
+RX Microsoft AMD64 ABI adapter retaining the complete 64-bit EFI return status.
+See [EFI_ENTRY](docs/EFI_ENTRY.md). Console CPU entry is still unconnected:
+complete live handler/stack dependencies and the production platform contract
+remain prerequisites.

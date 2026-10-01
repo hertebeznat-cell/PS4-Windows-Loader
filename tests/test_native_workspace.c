@@ -1,9 +1,11 @@
 #include "pwl_native_workspace.h"
 #include "pwl_boot_source.h"
 #include "pwl_native_transition.h"
+#include "pwl_efi_entry.h"
 #include "pe_fixture.h"
 #include "resident_fixture.h"
 static pwl_resident_image_t resident_image;
+static void test_transition_plan(pwl_native_workspace_t *w);
 
 #include <assert.h>
 #include <stdio.h>
@@ -350,11 +352,14 @@ static void test_resident_boot_image(void)
     assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
     *leaf(&w,entry)=saved;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    test_transition_plan(&w);
     assert(pwl_native_workspace_release(&w)==PWL_OK && kernel.frees==frees+1);
     pe16(image+0x608,0x3000);
     assert(pwl_native_workspace_prepare_resident(&a,&r,&resident_image,&w)==PWL_ERR_UNSUPPORTED);
     assert(!kernel.allocation && kernel.frees==frees+2);
 }
+
+static void test_transition_plan(pwl_native_workspace_t *w);
 
 static void test_transition_plan(pwl_native_workspace_t *w)
 {
@@ -374,6 +379,17 @@ static void test_transition_plan(pwl_native_workspace_t *w)
     assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
         &dep,1,&span,tables,32,&plan)==PWL_OK);
     assert(plan.root==span.physical_address && plan.table_count>0);
+    pwl_efi_entry_context_t entry={0},saved_entry={0};
+    if(w->boot_image.entry_address) {
+        assert(pwl_native_efi_entry_prepare(w,&resident_image,&plan,tables,&entry)==PWL_OK);
+        assert(entry.entry==w->boot_image.entry_address && entry.image_handle==((pwl_native_data_t *)w->data.prepare_address)->memory.image_handle);
+        assert(entry.system_table==((pwl_native_data_t *)w->data.prepare_address)->loaded_image.system_table && !entry.returned);
+        saved_entry=entry;
+        plan.root+=4096;
+        assert(pwl_native_efi_entry_prepare(w,&resident_image,&plan,tables,&entry)!=PWL_OK && !memcmp(&entry,&saved_entry,sizeof(entry)));
+        plan.root-=4096;
+    } else assert(pwl_native_efi_entry_prepare(w,&resident_image,&plan,tables,&entry)==PWL_ERR_INVALID_ARGUMENT);
+
     assert(pwl_x64_alias_tables_validate(plan.ranges,plan.range_count,tables,plan.table_count)==PWL_OK);
     pwl_x64_translation_t x;
     assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->firmware.physical_address,&x)==PWL_OK && x.executable && !x.writable);
