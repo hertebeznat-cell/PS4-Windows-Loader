@@ -317,7 +317,15 @@ pwl_status_t pwl_native_resident_environment_validate(
     pwl_efi_table_spec_t spec={w->firmware.physical_address,image->size,
         w->data.physical_address+offsetof(pwl_native_data_t,efi),sizeof(data->efi),{0}};
     for (size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=image->callbacks[i];
-    if (!data->graphics.enabled) return pwl_efi_tables_validate(&spec,&data->efi);
+    if (pwl_native_acpi_validate(w)!=PWL_OK) return PWL_ERR_INVALID_ARGUMENT;
+    pwl_efi_prepared_tables_t canonical=data->efi;
+    uint32_t crc=canonical.system.header.crc32;canonical.system.header.crc32=0;
+    if (pwl_efi_crc32(&canonical.system,sizeof(canonical.system))!=crc) return PWL_ERR_INVALID_ARGUMENT;
+    canonical.system.configuration_count=canonical.system.configuration_tables=0;
+    if (!data->graphics.enabled) {
+        canonical.system.header.crc32=pwl_efi_crc32(&canonical.system,sizeof(canonical.system));
+        return pwl_efi_tables_validate(&spec,&canonical);
+    }
     uint64_t destination=w->data.physical_address+offsetof(pwl_native_data_t,graphics);
     pwl_resident_graphics_t expected;
     if (pwl_graphics_prepare(&w->graphics_spec,&spec,destination,&expected)!=PWL_OK)
@@ -339,9 +347,6 @@ pwl_status_t pwl_native_resident_environment_validate(
         if (et && p->interface_address==destination+offsetof(pwl_resident_graphics_t,text)) found|=2;
     }
     if (found!=3) return PWL_ERR_INVALID_ARGUMENT;
-    pwl_efi_prepared_tables_t canonical=data->efi;
-    uint32_t crc=canonical.system.header.crc32;canonical.system.header.crc32=0;
-    if (pwl_efi_crc32(&canonical.system,sizeof(canonical.system))!=crc) return PWL_ERR_INVALID_ARGUMENT;
     canonical.system.console_out_handle=canonical.system.console_out=0;
     canonical.system.console_error_handle=canonical.system.console_error=0;
     canonical.system.header.crc32=pwl_efi_crc32(&canonical.system,sizeof(canonical.system));

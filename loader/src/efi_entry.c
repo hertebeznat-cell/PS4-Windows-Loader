@@ -23,6 +23,8 @@ pwl_status_t pwl_native_efi_entry_prepare(const pwl_native_workspace_t *w,
         }
     }
     const pwl_native_data_t *data=w->data.prepare_address;
+    if (w->acpi.count && pwl_acpi_mappings_validate(&w->acpi,tables,plan->table_count,plan->root)!=PWL_OK)
+        return PWL_ERR_BAD_IMAGE;
     if (data->image_mapping.root &&
         (data->image_mapping.root!=plan->root || data->image_mapping.tables_base!=plan->root ||
          data->image_mapping.tables_bytes!=plan->table_count*4096)) return PWL_ERR_BAD_IMAGE;

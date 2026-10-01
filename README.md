@@ -381,3 +381,20 @@ The console entry and production binding remain unconnected/refused. Complete
 exception/FP/AP/DMA ownership, inventory, video and runtime/platform services
 remain missing. This change does not provide a complete boot BIN or request
 another console probe. See [returning native call](docs/NATIVE_RETURNING_CALL.md).
+
+## Original ACPI graph and EFI publication · 1 October 2026
+
+The native preparation core now captures RSDP/RSDT/XSDT, all root children,
+and the FADT-selected DSDT/FACS through bounded physical reads. It validates
+checksums, lengths, graph closure and source stability, supports extended
+addresses above 4 GiB, and derives explicit RO/NX table mappings with writable
+FACS pages. Publication uses the ORIGINAL physical graph, reserves its pages
+as non-freeable ACPI NVS, updates SystemTable CRC/map key, and audits final-root
+mappings before entry. The preparation snapshots are never handed to EFI.
+
+Native tests cover both RSDP revisions, corrupt/changed/out-of-range data,
+preferred extended pointers, publication rollback, reservations and coexistence
+with the fixed graphics console. No emulator is used. This implements table
+capture/publication, not PS4 table discovery, complete Windows-compatible AML,
+source RAM pinning, or device handoff. Console main remains unconnected; no
+new boot binary or console test is requested. See [ACPI preparation](docs/NATIVE_ACPI.md).

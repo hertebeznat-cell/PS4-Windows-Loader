@@ -18,7 +18,7 @@ the processor. This is substantial executable code, not a PS4 launch result.
 | Screen output | GOP/text implemented for an explicit verified linear buffer; PS4 address, format, linearity, cacheability and mapping not supplied, so default output stays disabled |
 | Input and timing | Keyboard absent; PS4 TSC calibration absent; cooperative timer backend stays disabled without validated clock input |
 | Runtime Services | Wire table prepared but not published; complete time/reset/runtime lifetime and virtual-address services absent |
-| ACPI/SMBIOS/platform configuration | Registry exists, but verified target tables and hardware inventory are not synthesized |
+| ACPI/SMBIOS/platform configuration | Original ACPI graph capture, validation, NVS reservations and EFI publication implemented and host-tested; actual target reader/discovery/pinning, complete AML/device dependencies and SMBIOS still missing |
 | ExitBootServices | Still explicitly unsupported; retiring an allocation manager is not hardware ownership transfer |
 | Windows loader/kernel files | The supplied EFI-only archive does not include a complete Windows installation |
 
@@ -38,3 +38,8 @@ alone cannot substitute for that backend.
 See [returning native call](NATIVE_RETURNING_CALL.md) for the newly implemented
 state sequence and the exact distinction between host FP execution, synthetic
 mapping checks and missing console activation evidence.
+
+The [ACPI preparation backend](NATIVE_ACPI.md) now connects validated original
+platform tables to the final-root entry audit. It does not import the historical
+FW 1.01 E820 constants from the upstream Linux loader as current PS4 inventory,
+and never activates a copied FACS Global Lock.

@@ -276,3 +276,13 @@ Reference: [UEFI protocol handler services](https://uefi.org/specs/UEFI/2.10_A/0
 ## Preparation source transaction
 
 The bounded archive reader now connects preparation-side I/O to `pwl_native_boot_prepare()`, with partial-read handling, close-before-preparation and staging-buffer cleanup. The pinned SDK adapter compiles separately from the syscall-free core. See [boot source](BOOT_SOURCE.md). Production binding and CPU entry remain unavailable; the historical baseline table above describes the old Stage 4.8 path.
+
+## Original ACPI publication
+
+[ACPI preparation](NATIVE_ACPI.md) adds bounded graph capture and publication
+of original physical tables, with source rechecks, exact final mappings,
+non-freeable NVS reservations and transactional SystemTable/map updates.
+The native entry and environment audits include the published graph; fixed
+video publication can coexist with it. Actual platform table discovery,
+fault-contained physical reads, RAM pinning and complete AML/device lifetime
+remain platform work. The development object still has no console entry.

@@ -29,6 +29,17 @@ pwl_status_t pwl_native_image_mapping_bind(const pwl_native_workspace_t *workspa
 pwl_status_t pwl_native_graphics_publish(pwl_native_workspace_t *workspace,
     const pwl_resident_image_t *image,const pwl_native_transition_plan_t *plan,
     const pwl_x64_table_page_t *tables,const pwl_graphics_spec_t *spec);
+/* Publish ORIGINAL ACPI tables in the SystemTable configuration array. Recheck
+ * source bytes, final mappings and disjoint memory reservations first; failure
+ * leaves workspace/configuration/map/key unchanged. All table pages become
+ * non-freeable ACPI NVS, with no new allocatable memory. Caller retains source
+ * RAM and snapshot audit storage through the returning call and preparation
+ * release, and establishes effective WB caching. Does not copy a live Global
+ * Lock, relocate AML addresses, transfer devices or activate CPU tables. */
+pwl_status_t pwl_native_acpi_publish(pwl_native_workspace_t *workspace,
+    const pwl_resident_image_t *image,const pwl_native_transition_plan_t *plan,
+    const pwl_x64_table_page_t *tables,const pwl_acpi_source_t *source,
+    const pwl_acpi_snapshot_t *snapshot);
 /* SysV callback adapter for pwl_x64_address_call. Context points to resident
  * memory under the active root. Calls the EFI entry with Microsoft AMD64 ABI,
  * preserves all 64 EFI_STATUS bits in context, returns zero after EFI returns.

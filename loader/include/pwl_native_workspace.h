@@ -5,6 +5,7 @@
 #include "pwl_firmware.h"
 #include "pwl_pe_loader.h"
 #include "pwl_resident.h"
+#include "pwl_acpi.h"
 
 #define PWL_NATIVE_MAX_TABLES 128U
 #define PWL_NATIVE_MAX_REGIONS 9U
@@ -40,6 +41,7 @@ typedef struct pwl_native_workspace {
     pwl_x64_table_page_t tables[PWL_NATIVE_MAX_TABLES];
     size_t table_count;
     pwl_graphics_spec_t graphics_spec; /* Preparation owner records the explicit external framebuffer. */
+    pwl_acpi_snapshot_t acpi; /* Borrowed audit bytes retained until release; original tables stay pinned. */
 } pwl_native_workspace_t;
 
 /* Performs allocation -> physical verification -> resident copies -> memory
@@ -78,5 +80,9 @@ pwl_status_t pwl_native_boot_prepare(const pwl_ps4_memory_api_t *api,
  * CPU transition readiness or provide a platform memory map. */
 pwl_status_t pwl_native_resident_environment_validate(
     const pwl_native_workspace_t *workspace, const pwl_resident_image_t *image);
+
+/* Preparation-side audit of the published original ACPI graph and its NVS
+ * reservations. Final mappings are independently checked by EFI entry. */
+pwl_status_t pwl_native_acpi_validate(const pwl_native_workspace_t *workspace);
 
 #endif

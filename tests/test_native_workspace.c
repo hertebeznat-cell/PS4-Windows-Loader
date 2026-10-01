@@ -13,6 +13,7 @@ static void test_transition_plan(pwl_native_workspace_t *w);
 #include <stdlib.h>
 #include <string.h>
 #include "native_call_fixture.h"
+#include "acpi_fixture.h"
 
 static struct {
     void *allocation;
@@ -552,6 +553,62 @@ static void test_boot_source(unsigned char *archive,size_t bytes,const uint16_t 
     archive[0]=saved;
 }
 
+static void test_acpi_publication(pwl_native_workspace_t *w,
+    pwl_native_transition_plan_t *plan,pwl_x64_table_page_t *tables,size_t capacity)
+{
+    static acpi_fixture_t f;static unsigned char storage[65536];
+    acpi_fixture_init(&f,2);pwl_acpi_source_t source=acpi_fixture_source(&f);
+    pwl_acpi_snapshot_t snapshot;
+    assert(pwl_acpi_capture(&source,ACPI_BASE+16,storage,sizeof(storage),&snapshot)==PWL_OK);
+    pwl_native_data_t *data=w->data.prepare_address;
+    pwl_fw_memory_t original=data->memory;pwl_efi_system_table_t system=data->efi.system;
+    assert(pwl_native_acpi_publish(w,&resident_image,plan,tables,&source,&snapshot)==PWL_ERR_BAD_IMAGE);
+    assert(!memcmp(&original,&data->memory,sizeof(original)) && !memcmp(&system,&data->efi.system,sizeof(system)));
+    pwl_x64_alias_range_t ranges[128];size_t n;
+    assert(pwl_acpi_ranges(&snapshot,ranges,128,&n)==PWL_OK);
+    assert(plan->range_count+n<=PWL_TRANSITION_MAX_RANGES);
+    for(size_t i=0;i<n;i++)plan->ranges[plan->range_count++]=ranges[i];
+    for(size_t i=1;i<plan->range_count;i++) {
+        pwl_x64_alias_range_t r=plan->ranges[i];size_t j=i;
+        while(j && plan->ranges[j-1].virtual_address>r.virtual_address) {
+            plan->ranges[j]=plan->ranges[j-1];j--;
+        }plan->ranges[j]=r;
+    }
+    assert(pwl_x64_alias_tables_build(plan->ranges,plan->range_count,tables,capacity,&plan->table_count)==PWL_OK);
+    f.low[24576+16]=1;
+    assert(pwl_native_acpi_publish(w,&resident_image,plan,tables,&source,&snapshot)==PWL_ERR_BAD_IMAGE);
+    assert(!memcmp(&original,&data->memory,sizeof(original)) && !w->acpi.count);
+    f.low[24576+16]=0;
+    /* A source interval already advertised elsewhere cannot be silently
+     * retyped into ACPI NVS, even if it is reserved rather than free. */
+    for(size_t j=data->memory.count;j;j--)data->memory.entries[j]=data->memory.entries[j-1];
+    data->memory.entries[0]=(pwl_fw_memory_entry_t){{0,0,ACPI_BASE,0,1,8},0};data->memory.count++;
+    pwl_fw_memory_t conflicting=data->memory;
+    assert(pwl_native_acpi_publish(w,&resident_image,plan,tables,&source,&snapshot)==PWL_ERR_ACCESS_DENIED);
+    assert(!memcmp(&conflicting,&data->memory,sizeof(conflicting)) && !w->acpi.count);
+    data->memory=original;
+    assert(pwl_native_acpi_publish(w,&resident_image,plan,tables,&source,&snapshot)==PWL_OK);
+    assert(w->acpi.count==8 && data->efi.system.configuration_count==1);
+    assert(data->configuration[0].table==ACPI_BASE+16);
+    assert(data->efi.system.configuration_tables==w->data.physical_address+offsetof(pwl_native_data_t,configuration));
+    assert(data->memory.count==original.count+n && data->memory.key==original.key+1 && !data->memory.issued_key);
+    assert(pwl_native_resident_environment_validate(w,&resident_image)==PWL_OK);
+    pwl_efi_entry_context_t entry;
+    assert(pwl_native_efi_entry_prepare(w,&resident_image,plan,tables,&entry)==PWL_OK);
+    assert(pwl_fw_free_pages(&data->memory,ACPI_BASE,1)==PWL_EFI_NOT_FOUND);
+    assert(pwl_native_acpi_publish(w,&resident_image,plan,tables,&source,&snapshot)==PWL_ERR_ACCESS_DENIED);
+    data->configuration[0].table++;
+    assert(pwl_native_resident_environment_validate(w,&resident_image)!=PWL_OK);
+    data->configuration[0].table--;
+    data->configuration[0].guid.bytes[0]^=1;
+    assert(pwl_native_resident_environment_validate(w,&resident_image)!=PWL_OK);
+    data->configuration[0].guid.bytes[0]^=1;
+    data->memory.entries[0].descriptor.type=7;
+    assert(pwl_native_resident_environment_validate(w,&resident_image)!=PWL_OK);
+    data->memory.entries[0].descriptor.type=10;
+    assert(pwl_native_resident_environment_validate(w,&resident_image)==PWL_OK);
+}
+
 static void test_boot_archive(void)
 {
     unsigned char archive[4096]={0};memcpy(archive,"PWLFILES",8);
@@ -619,6 +676,7 @@ static void test_boot_archive(void)
     assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
     pwl_efi_entry_context_t entry;
     assert(pwl_native_efi_entry_prepare(&w,&resident_image,&plan,tables,&entry)==PWL_OK);
+    test_acpi_publication(&w,&plan,tables,32);
     data->graphics.mode.framebuffer+=4096;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
     data->graphics.mode.framebuffer-=4096;
