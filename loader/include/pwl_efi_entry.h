@@ -34,6 +34,6 @@ pwl_status_t pwl_native_graphics_publish(pwl_native_workspace_t *workspace,
  * preserves all 64 EFI_STATUS bits in context, returns zero after EFI returns.
  * No CPU mode change or exception recovery. Never call a PA from user mode.
  * Text between these symbols is copyable, with no external references. */
-int pwl_x64_efi_entry_call(void *context);
-extern const unsigned char pwl_x64_efi_entry_call_end[];
+int __attribute__((visibility("hidden"))) pwl_x64_efi_entry_call(void *context);
+extern const unsigned char pwl_x64_efi_entry_call_end[] __attribute__((visibility("hidden")));
 #endif

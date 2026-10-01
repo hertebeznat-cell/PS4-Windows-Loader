@@ -2,6 +2,7 @@
 #define PWL_ENTRY_PIPELINE_H
 #include "pwl_table_snapshot.h"
 #include "pwl_efi_entry.h"
+#include "pwl_native_call.h"
 typedef struct pwl_entry_pipeline_report {
     unsigned stage;
     pwl_status_t status;
@@ -19,5 +20,18 @@ pwl_status_t pwl_native_entry_capture_prepare(
     const pwl_x64_alias_range_t *dependencies,size_t dependency_count,
     const pwl_owned_span_t *table_span,pwl_x64_table_page_t *tables,size_t capacity,
     pwl_native_transition_plan_t *plan,pwl_efi_entry_context_t *entry,
+    pwl_entry_pipeline_report_t *report);
+/* Extends the preparation transaction with the returning native call record.
+ * Stage 5 means a call was constructed, not complete platform ownership.
+ * Failure invalidates the plan and its newly installed permission binding.
+ * Still no activation or execution. */
+pwl_status_t pwl_native_entry_call_prepare(
+    const pwl_native_workspace_t *workspace,const pwl_resident_image_t *image,
+    const pwl_x64_cpu_state_t *cpu,pwl_table_read_fn read,void *read_context,
+    pwl_x64_table_page_t *snapshot,size_t snapshot_capacity,
+    const pwl_x64_alias_range_t *dependencies,size_t dependency_count,
+    const pwl_owned_span_t *table_span,pwl_x64_table_page_t *tables,size_t capacity,
+    pwl_native_transition_plan_t *plan,const pwl_fp_layout_t *fp,
+    const pwl_native_call_storage_t *storage,pwl_native_call_t **call,
     pwl_entry_pipeline_report_t *report);
 #endif

@@ -365,3 +365,19 @@ prove those inputs. No new boot binary or repeated console test is proposed.
 See [RESIDENT_IMAGES](docs/RESIDENT_IMAGES.md),
 [RESIDENT_GRAPHICS](docs/RESIDENT_GRAPHICS.md) and the exact
 [remaining launch requirements](docs/NATIVE_LAUNCH_STATUS.md).
+
+## Returning CPU transition · 1 October 2026
+
+The entry preparation transaction now also constructs an owned returning call
+to the resident StartImage wrapper. The new CPL0 assembly rechecks live mode,
+root and FP layout, saves/restores x87/SSE/AVX, temporarily clears TS/PGE, switches
+root/stack and restores the caller on return. Both roots must retain audited
+code/control and both complete stack extents; destructive aliases are refused.
+Native host tests exercise the shared FXSAVE/XSAVE primitives and copied CPL3
+refusal before reads. Page-table transaction tests exercise construction and
+rollback. No emulator is used and no host CR3 change is claimed.
+
+The console entry and production binding remain unconnected/refused. Complete
+exception/FP/AP/DMA ownership, inventory, video and runtime/platform services
+remain missing. This change does not provide a complete boot BIN or request
+another console probe. See [returning native call](docs/NATIVE_RETURNING_CALL.md).

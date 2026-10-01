@@ -5,8 +5,10 @@ Production memory calls are now blocked by an executable binding gate; firmware
 13.52 remains unverified. See the [binding audit](PS4_1352_BINDING.md) for exact
 missing evidence and public-source provenance. There is no new console payload. Stage 4.8 remains preflight.
 Do not send `ps4wl-native-core.o` to a console: it is a relocatable development
-object, without an entry point, EFI System Table, relocation/activation layer
-or CPU transition. No Windows boot or new hardware milestone is claimed.
+object, without a console entry point or a complete platform activation layer.
+It now contains a controlled returning CPU transition and its preparation API,
+but that component is not connected to console main or hardware-validated.
+No Windows boot or new hardware milestone is claimed.
 
 ## Source audit at baseline f9b0b25
 

@@ -12,6 +12,7 @@ static void test_transition_plan(pwl_native_workspace_t *w);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "native_call_fixture.h"
 
 static struct {
     void *allocation;
@@ -384,6 +385,12 @@ static void test_transition_plan(pwl_native_workspace_t *w)
     for(size_t i=0;i<4;i++) before[i]=(pwl_x64_table_page_t){0x1000+i*4096,old[i]};
     old[0][511]=0x2003;old[1][0]=0x3003;old[2][0]=0x4003;old[3][0]=pa|1;
     pwl_x64_alias_range_t dep={va,pa,4096,0,1,0};
+    memset(buffer,0xaa,32*4096);
+    pwl_owned_span_t alias_span={buffer,before[0].physical_address,32*4096};
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&alias_span,tables,32,&plan)==PWL_ERR_INVALID_ARGUMENT);
+    for(size_t i=0;i<32*4096;i++)assert(((unsigned char *)buffer)[i]==0xaa);
+    assert(!plan.root && !plan.table_count && !plan.range_count);
     size_t original_count=w->table_count;
     uint64_t original_root=w->tables[0].entries[0];
     assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
@@ -586,6 +593,7 @@ static void test_boot_archive(void)
     data->boot_file_record=0;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
     data->boot_file_record=2;
+    test_native_call_transaction(&w);
     /* A fixed console is published only after its complete external linear
      * framebuffer has actual identity RW/NX mappings with the requested PAT. */
     unsigned char table_bytes[32*4096] __attribute__((aligned(4096)));

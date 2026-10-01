@@ -24,7 +24,10 @@ pwl_status_t pwl_native_transition_plan_prepare(
        overlap((uintptr_t)span->prepare_address,span->size,w->arena.kernel_address,w->arena.size))
         return PWL_ERR_INVALID_ARGUMENT;
     for(i=0;i<before_count;i++) {
-        if(!before[i].entries || overlap((uintptr_t)span->prepare_address,span->size,
+        if(!before[i].entries || !before[i].physical_address ||
+           before[i].physical_address%PWL_PAGE_SIZE ||
+           overlap(span->physical_address,span->size,before[i].physical_address,PWL_PAGE_SIZE) ||
+           overlap((uintptr_t)span->prepare_address,span->size,
              (uintptr_t)before[i].entries,PWL_PAGE_SIZE)) return PWL_ERR_INVALID_ARGUMENT;
     }
     for(i=0;i<w->mapping_count;i++) {
