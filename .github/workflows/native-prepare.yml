@@ -5,7 +5,11 @@ on:
     paths:
       - 'loader/**'
       - 'payload/native_prepare.c'
+      - 'payload/probe_start.S'
+      - 'payload/probe_linker.ld'
       - 'tools/build_native_prepare.sh'
+      - 'tools/build_kernel_dump.sh'
+      - 'tools/build_resident.sh'
       - 'tools/test_native_core.sh'
       - 'tests/test_ps4_profile.c'
       - 'docs/PS4_NATIVE_PREPARATION.md'

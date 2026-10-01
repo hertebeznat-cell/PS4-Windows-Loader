@@ -74,7 +74,9 @@ typedef struct pwl_owned_span {
 /* arena must initially be zero and must not be copied while owning memory.
  * Exactly one M_NOWAIT allocation attempt (not a lock-free callback).
  * Every 4 KiB hardware page is checked using pmap_extract, while the original
- * 16 KiB VM allocation is kept alive. Bad PA results free a valid original KVA;
+ * 16 KiB VM allocation is kept alive. Bad PA results revalidate the binding
+ * before freeing a valid original KVA; refusal retains ownership and propagates
+ * the cleanup error so the caller keeps reader/callback storage pinned.
  * a malformed returned KVA is retained and never passed to guessed cleanup.
  * Physical backing below 1 MiB is excluded. This acquires an owned RAM extent,
  * not the platform's complete RAM/MMIO map.
