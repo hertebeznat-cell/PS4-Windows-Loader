@@ -20,6 +20,29 @@ typedef struct pwl_resident_open {
     uint32_t protocol_index, attributes, count;
 } pwl_resident_open_t;
 typedef struct pwl_efi_guid { unsigned char bytes[16]; } pwl_efi_guid_t;
+#define PWL_RESIDENT_CONFIGURATIONS 32U
+typedef struct pwl_efi_configuration {
+    pwl_efi_guid_t guid;
+    uint64_t table;
+} pwl_efi_configuration_t;
+typedef struct pwl_efi_open_info {
+    uint64_t agent_handle, controller_handle;
+    uint32_t attributes, open_count;
+} pwl_efi_open_info_t;
+_Static_assert(sizeof(pwl_efi_configuration_t)==24,"AMD64 configuration layout");
+_Static_assert(sizeof(pwl_efi_open_info_t)==24,"AMD64 open information layout");
+#define PWL_RESIDENT_EVENTS 32U
+#define PWL_EVT_NOTIFY_WAIT UINT32_C(0x100)
+#define PWL_EVT_NOTIFY_SIGNAL UINT32_C(0x200)
+typedef void (__attribute__((ms_abi)) *pwl_efi_event_notify_t)(uint64_t,void *);
+typedef struct pwl_resident_event {
+    uint64_t handle, notify_tpl;
+    pwl_efi_event_notify_t notify;
+    const void *context;
+    pwl_efi_guid_t group;
+    uint32_t type;
+    unsigned signaled, grouped;
+} pwl_resident_event_t;
 typedef struct pwl_resident_protocol {
     uint64_t handle, interface_address;
     pwl_efi_guid_t guid;
@@ -50,9 +73,17 @@ typedef struct pwl_resident_data {
     unsigned files_enabled;
     unsigned boot_origin_bound;
     uint32_t boot_file_record;
+    pwl_efi_configuration_t configuration[PWL_RESIDENT_CONFIGURATIONS];
+    pwl_resident_event_t events[PWL_RESIDENT_EVENTS];
+    uint64_t event_next_handle;
+    uint64_t event_queue[2][PWL_RESIDENT_EVENTS]; /* FIFO at TPL_CALLBACK/NOTIFY. */
+    unsigned event_queue_count[2];
     unsigned char boot_file_path[520]; /* FilePath node, UTF-16 name, End node. */
 } pwl_resident_data_t;
 
+/* Internal SysV helper; public notification callbacks use Microsoft AMD64 ABI. */
+void pwl_resident_events_dispatch(pwl_resident_data_t *data);
+void pwl_resident_signal_group(pwl_resident_data_t *data,const pwl_efi_guid_t *group);
 typedef struct pwl_resident_image {
     const void *bytes;
     size_t size;

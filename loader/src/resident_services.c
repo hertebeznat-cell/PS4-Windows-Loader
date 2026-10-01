@@ -16,7 +16,7 @@ static pwl_resident_data_t *state(void)
 uint64_t EFI pwl_resident_raise_tpl(uint64_t tpl)
 {
     pwl_resident_data_t *d=state();
-    if (!d) return 0;
+    if (!d || d->memory.exited) return 0;
     uint64_t old=d->tpl;
     if ((tpl==4 || tpl==8 || tpl==16 || tpl==31) && tpl>=old) d->tpl=tpl;
     return old;
@@ -24,7 +24,10 @@ uint64_t EFI pwl_resident_raise_tpl(uint64_t tpl)
 void EFI pwl_resident_restore_tpl(uint64_t tpl)
 {
     pwl_resident_data_t *d=state();
-    if (d && (tpl==4 || tpl==8 || tpl==16 || tpl==31) && tpl<=d->tpl) d->tpl=tpl;
+    if (d && !d->memory.exited && (tpl==4 || tpl==8 || tpl==16 || tpl==31) && tpl<=d->tpl) {
+        d->tpl=tpl;
+        pwl_resident_events_dispatch(d);
+    }
 }
 uint64_t EFI pwl_resident_allocate_pages(unsigned kind,unsigned type,uint64_t pages,uint64_t *pa)
 {
@@ -86,8 +89,8 @@ void EFI pwl_resident_set_mem(void *to,size_t size,unsigned char value)
 }
 
 /* Serialized protocol registry. Handles are opaque values, never dereferenced.
- * Driver ownership/open tracking and notification events are not implemented;
- * no OpenProtocol entry is published by this registry. */
+ * Query-mode opens are tracked; driver binding and protocol notifications
+ * remain unsupported. */
 static int guid_equal(const pwl_efi_guid_t *a,const pwl_efi_guid_t *b)
 {
     for (size_t i=0;i<16;i++) if (a->bytes[i]!=b->bytes[i]) return 0;
@@ -460,4 +463,104 @@ uint64_t EFI pwl_resident_close_protocol(uint64_t handle,const pwl_efi_guid_t *g
         }
     }
     return closed ? PWL_EFI_SUCCESS : PWL_EFI_NOT_FOUND;
+}
+
+uint64_t EFI pwl_resident_locate_handle_buffer(unsigned search,const pwl_efi_guid_t *guid,
+    void *key,size_t *count,uint64_t **buffer)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !count || !buffer) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    uint64_t matches[PWL_RESIDENT_PROTOCOLS],pa=0;
+    size_t bytes=sizeof(matches);
+    uint64_t status=pwl_resident_locate_handle(search,guid,key,&bytes,matches);
+    if (status) return status;
+    status=pwl_fw_allocate_pool(&d->memory,4,bytes,&pa); /* EfiBootServicesData */
+    if (status) return status;
+    uint64_t *out=(uint64_t *)(uintptr_t)pa;
+    size_t n=bytes/sizeof(*out);
+    for (size_t i=0;i<n;i++) out[i]=matches[i];
+    *buffer=out;*count=n;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_protocols_per_handle(uint64_t handle,
+    pwl_efi_guid_t ***buffer,size_t *count)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !buffer || !count || !handle_known(d,handle)) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    size_t n=0;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) if (d->protocols[i].handle==handle) n++;
+    uint64_t pa=0;
+    uint64_t status=pwl_fw_allocate_pool(&d->memory,4,
+        n*(sizeof(pwl_efi_guid_t *)+sizeof(pwl_efi_guid_t)),&pa);
+    if (status) return status;
+    pwl_efi_guid_t **out=(pwl_efi_guid_t **)(uintptr_t)pa;
+    pwl_efi_guid_t *copies=(pwl_efi_guid_t *)(out+n);
+    /* One freeable allocation contains both the pointer list and GUID copies;
+     * registry changes cannot invalidate pointers in the returned snapshot. */
+    size_t k=0;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) if (d->protocols[i].handle==handle) {
+        copies[k]=d->protocols[i].guid;out[k]=&copies[k];k++;
+    }
+    *buffer=out;*count=n;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_open_protocol_information(uint64_t handle,
+    const pwl_efi_guid_t *guid,pwl_efi_open_info_t **buffer,size_t *count)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid || !buffer || !count || !handle_known(d,handle))
+        return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_resident_protocol_t *entry=find_protocol(d,handle,guid);
+    if (!entry) return PWL_EFI_NOT_FOUND;
+    uint32_t index=(uint32_t)(entry-d->protocols);
+    size_t n=0;
+    for (size_t i=0;i<PWL_RESIDENT_OPENS;i++)
+        if (d->opens[i].count && d->opens[i].protocol_index==index) n++;
+    if (!n) { *buffer=NULL;*count=0;return PWL_EFI_SUCCESS; }
+    uint64_t pa=0;
+    uint64_t status=pwl_fw_allocate_pool(&d->memory,4,n*sizeof(pwl_efi_open_info_t),&pa);
+    if (status) return status;
+    pwl_efi_open_info_t *out=(pwl_efi_open_info_t *)(uintptr_t)pa;
+    size_t k=0;
+    for (size_t i=0;i<PWL_RESIDENT_OPENS;i++) {
+        const pwl_resident_open_t *open=&d->opens[i];
+        if (open->count && open->protocol_index==index)
+            out[k++]=(pwl_efi_open_info_t){open->agent,0,open->attributes,open->count};
+    }
+    *buffer=out;*count=n;
+    return PWL_EFI_SUCCESS;
+}
+uint64_t EFI pwl_resident_install_configuration_table(const pwl_efi_guid_t *guid,void *table)
+{
+    pwl_resident_data_t *d=state();
+    if (!d || !guid) return PWL_EFI_INVALID_PARAMETER;
+    if (d->memory.exited) return PWL_EFI_ACCESS_DENIED;
+    pwl_efi_guid_t copy=*guid;
+    size_t count=(size_t)d->efi.system.configuration_count;
+    if (count>PWL_RESIDENT_CONFIGURATIONS) return PWL_EFI_INVALID_PARAMETER;
+    size_t i;
+    for (i=0;i<count;i++) if (guid_equal(&d->configuration[i].guid,&copy)) break;
+    if (!table) {
+        if (i==count) return PWL_EFI_NOT_FOUND;
+        for (size_t j=i;j+1<count;j++) d->configuration[j]=d->configuration[j+1];
+        d->configuration[--count]=(pwl_efi_configuration_t){0};
+    } else {
+        if (i==count) {
+            if (count==PWL_RESIDENT_CONFIGURATIONS) return PWL_EFI_OUT_OF_RESOURCES;
+            count++;
+        }
+        d->configuration[i]=(pwl_efi_configuration_t){copy,(uint64_t)(uintptr_t)table};
+    }
+    d->efi.system.configuration_count=count;
+    d->efi.system.configuration_tables=count ? (uint64_t)(uintptr_t)d->configuration : 0;
+    d->efi.system.header.crc32=0;
+    d->efi.system.header.crc32=pwl_efi_crc32(&d->efi.system,sizeof(d->efi.system));
+    /* Publish pointer/count/CRC before notifying GUID-matched event consumers.
+     * The table bytes themselves remain caller-owned; this does not generate
+     * ACPI/SMBIOS or establish their platform accuracy. */
+    pwl_resident_signal_group(d,&copy);
+    return PWL_EFI_SUCCESS;
 }

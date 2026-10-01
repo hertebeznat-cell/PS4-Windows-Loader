@@ -60,11 +60,192 @@ typedef uint64_t (EFI *close_protocol_fn)(uint64_t,const pwl_efi_guid_t *,uint64
     _Static_assert(sizeof(name)==sizeof(entry),"AMD64 pointers"); \
     memcpy(&name,&entry,sizeof(name)); } while(0)
 
+typedef uint64_t (EFI *event_create_fn)(uint32_t,uint64_t,pwl_efi_event_notify_t,void *,uint64_t *);
+typedef uint64_t (EFI *event_create_ex_fn)(uint32_t,uint64_t,pwl_efi_event_notify_t,const void *,const pwl_efi_guid_t *,uint64_t *);
+typedef uint64_t (EFI *event_fn)(uint64_t);
+typedef uint64_t (EFI *event_wait_fn)(size_t,const uint64_t *,size_t *);
+typedef uint64_t (EFI *configuration_fn)(const pwl_efi_guid_t *,void *);
+typedef uint64_t (EFI *handle_buffer_fn)(unsigned,const pwl_efi_guid_t *,void *,size_t *,uint64_t **);
+typedef uint64_t (EFI *protocols_buffer_fn)(uint64_t,pwl_efi_guid_t ***,size_t *);
+typedef uint64_t (EFI *open_info_fn)(uint64_t,const pwl_efi_guid_t *,pwl_efi_open_info_t **,size_t *);
+typedef struct event_context {
+    pwl_resident_data_t *data;
+    event_fn signal,close;
+    uint64_t target,group_plain;
+    unsigned calls,threshold,expected_tpl,id,close_self;
+    unsigned *order,*order_count;
+} event_context_t;
+static void EFI event_notify(uint64_t event,void *context)
+{
+    event_context_t *c=context;
+    assert(c->data->tpl==c->expected_tpl);
+    c->calls++;
+    if(c->order)c->order[(*c->order_count)++]=c->id;
+    if(c->group_plain) {
+        unsigned signaled=0;
+        for(size_t i=0;i<PWL_RESIDENT_EVENTS;i++)
+            if(c->data->events[i].handle==c->group_plain)signaled=c->data->events[i].signaled;
+        assert(signaled); /* All members signaled before the first callback. */
+    }
+    if(c->target && c->calls>=c->threshold)assert(c->signal(c->target)==0);
+    if(c->close_self)assert(c->close(event)==0);
+}
+typedef struct configuration_context {
+    pwl_resident_data_t *data;
+    unsigned calls;
+    uint64_t expected_count;
+} configuration_context_t;
+static void EFI configuration_notify(uint64_t event,void *context)
+{
+    configuration_context_t *c=context;
+    assert(event && c->data->tpl==8);
+    pwl_efi_system_table_t copy=c->data->efi.system;
+    assert(copy.configuration_count==c->expected_count);
+    assert(copy.configuration_tables==(c->expected_count ? (uintptr_t)c->data->configuration : 0));
+    uint32_t crc=copy.header.crc32;copy.header.crc32=0;
+    assert(crc==pwl_efi_crc32(&copy,sizeof(copy)));c->calls++;
+}
+static void run_configurations(unsigned char *code,pwl_resident_data_t *d)
+{
+    LOAD(configuration_fn,install,40);LOAD(event_create_ex_fn,create,35);LOAD(event_fn,close,33);
+    pwl_efi_table_spec_t spec={0};spec.code_pa=(uintptr_t)code;spec.code_bytes=resident_image.size;
+    spec.data_pa=(uintptr_t)&d->efi;spec.data_bytes=sizeof(d->efi);
+    for(size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=resident_image.callbacks[i];
+    assert(pwl_efi_tables_prepare(&spec,&d->efi)==PWL_OK);
+    pwl_efi_guid_t a={{1}},b={{2}},unknown={{3}};
+    int one=1,two=2;uint64_t event;
+    configuration_context_t c={.data=d,.expected_count=1};
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,configuration_notify,&c,&a,&event)==0);
+    assert(install(NULL,&one)==PWL_EFI_INVALID_PARAMETER);
+    assert(install(&unknown,NULL)==PWL_EFI_NOT_FOUND && !c.calls);
+    assert(install(&a,&one)==0 && c.calls==1 && d->configuration[0].table==(uintptr_t)&one);
+    assert(install(&a,&two)==0 && c.calls==2 && d->configuration[0].table==(uintptr_t)&two);
+    assert(install(&b,&one)==0 && d->efi.system.configuration_count==2 && c.calls==2);
+    assert(install(&a,NULL)==0 && c.calls==3 && d->configuration[0].guid.bytes[0]==2);
+    assert(install(&b,NULL)==0 && !d->efi.system.configuration_tables && !d->efi.system.configuration_count);
+    assert(close(event)==0);
+    for(unsigned i=0;i<PWL_RESIDENT_CONFIGURATIONS;i++) {
+        pwl_efi_guid_t guid={{0}};guid.bytes[0]=(unsigned char)(i+10);
+        assert(install(&guid,&one)==0);
+    }
+    pwl_efi_system_table_t before=d->efi.system;
+    assert(install(&unknown,&one)==PWL_EFI_OUT_OF_RESOURCES && !memcmp(&before,&d->efi.system,sizeof(before)));
+    /* Snapshot an aliased GUID before compacting the configuration array. */
+    assert(install(&d->configuration[0].guid,NULL)==0);
+    assert(d->efi.system.configuration_count==PWL_RESIDENT_CONFIGURATIONS-1);
+    d->memory.exited=1;
+    assert(install(&a,&one)==PWL_EFI_ACCESS_DENIED);d->memory.exited=0;
+    while(d->efi.system.configuration_count)assert(install(&d->configuration[0].guid,NULL)==0);
+    assert(pwl_efi_tables_validate(&spec,&d->efi)==PWL_OK);
+}
+static void run_events(unsigned char *code,pwl_resident_data_t *d)
+{
+    LOAD(event_create_fn,create,31);LOAD(event_fn,signal,32);
+    LOAD(event_fn,close,33);LOAD(event_fn,check,34);
+    LOAD(event_create_ex_fn,create_ex,35);LOAD(event_wait_fn,wait,36);
+    LOAD(raise_fn,raise_tpl,0);LOAD(restore_fn,restore_tpl,1);
+    uint64_t plain=0,event=0,other=0,stale;
+    size_t index=99;
+    assert(create(0,UINT64_MAX,NULL,NULL,&plain)==0 && plain);
+    assert(check(plain)==PWL_EFI_NOT_READY);
+    assert(signal(plain)==0 && signal(plain)==0);
+    assert(check(plain)==0 && check(plain)==PWL_EFI_NOT_READY);
+    assert(signal(plain)==0 && wait(1,&plain,&index)==0 && index==0);
+    stale=plain;assert(close(plain)==0 && close(plain)==PWL_EFI_INVALID_PARAMETER);
+    assert(create(0,0,NULL,NULL,&plain)==0 && plain!=stale);
+    assert(signal(stale)==PWL_EFI_INVALID_PARAMETER && check(stale)==PWL_EFI_INVALID_PARAMETER);
+    uint64_t output=123;
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,NULL,NULL,&output)==PWL_EFI_INVALID_PARAMETER && output==123);
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,4,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,31,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
+    assert(create(0x300,8,event_notify,NULL,&output)==PWL_EFI_INVALID_PARAMETER);
+    assert(create(0x80000200,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED && output==123);
+    assert(create(0x201,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED);
+    assert(create(0x60000202,8,event_notify,NULL,&output)==PWL_EFI_UNSUPPORTED);
+    assert(create(0,0,NULL,NULL,NULL)==PWL_EFI_INVALID_PARAMETER);
+    assert(check(0)==PWL_EFI_INVALID_PARAMETER && signal(UINT64_MAX)==PWL_EFI_INVALID_PARAMETER);
+    event_context_t c={.data=d,.signal=signal,.close=close,.expected_tpl=8};
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&c,&event)==0);
+    assert(check(event)==PWL_EFI_INVALID_PARAMETER);
+    assert(signal(event)==0 && c.calls==1 && d->tpl==4);
+    assert(raise_tpl(16)==4);
+    assert(signal(event)==0 && signal(event)==0 && c.calls==1);
+    restore_tpl(8);assert(c.calls==1 && d->tpl==8);
+    restore_tpl(4);assert(c.calls==2 && d->tpl==4);
+    assert(raise_tpl(31)==4 && signal(event)==0);
+    assert(close(event)==0);restore_tpl(4);assert(c.calls==2);
+    c.close_self=1;
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&c,&event)==0);
+    assert(signal(event)==0 && c.calls==3 && signal(event)==PWL_EFI_INVALID_PARAMETER);
+    c.close_self=0;c.calls=0;c.threshold=3;
+    assert(create(PWL_EVT_NOTIFY_WAIT,8,event_notify,&c,&event)==0);c.target=event;
+    assert(check(event)==PWL_EFI_NOT_READY && c.calls==1);
+    uint64_t list[]={plain,event};
+    assert(wait(2,list,&index)==0 && index==1 && c.calls==3);
+    assert(close(event)==0);
+    c.target=0;c.close_self=1;
+    assert(create(PWL_EVT_NOTIFY_WAIT,8,event_notify,&c,&event)==0);
+    assert(check(event)==PWL_EFI_INVALID_PARAMETER && close(event)==PWL_EFI_INVALID_PARAMETER);
+    c.close_self=0;
+    /* FIFO at equal priority, NOTIFY before CALLBACK, group atomic marking. */
+    unsigned order[16]={0},n=0;
+    event_context_t a={.data=d,.signal=signal,.close=close,.expected_tpl=8,.id=1,.order=order,.order_count=&n};
+    event_context_t b=a;b.id=2;
+    event_context_t high=a;high.id=3;high.expected_tpl=16;
+    pwl_efi_guid_t group={{0x73,0x11}};
+    assert(create_ex(0,0,NULL,NULL,&group,&other)==0);
+    a.group_plain=other;b.group_plain=other;high.group_plain=other;
+    uint64_t low1,low2,hi;
+    assert(create_ex(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&a,&group,&low1)==0);
+    assert(create_ex(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&b,&group,&low2)==0);
+    assert(create_ex(PWL_EVT_NOTIFY_SIGNAL,16,event_notify,&high,&group,&hi)==0);
+    assert(signal(low1)==0 && n==3 && order[0]==3 && order[1]==1 && order[2]==2);
+    assert(check(other)==0);
+    assert(close(low1)==0 && close(low2)==0 && close(hi)==0 && close(other)==0);
+    /* Higher-priority notification may nest while a lower one executes. */
+    a.group_plain=0;high.group_plain=0;n=0;
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,16,event_notify,&high,&hi)==0);
+    a.target=hi;
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&a,&low1)==0);
+    assert(signal(low1)==0 && n==2 && order[0]==1 && order[1]==3 && d->tpl==4);
+    assert(close(low1)==0 && close(hi)==0);
+    /* Close a queued peer, reuse its slot, then deliver the next queued event. */
+    a.target=0;n=0;
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&a,&low1)==0);
+    assert(create(PWL_EVT_NOTIFY_SIGNAL,8,event_notify,&b,&low2)==0);
+    assert(raise_tpl(31)==4);
+    assert(signal(low2)==0 && signal(low1)==0 && close(low2)==0);
+    assert(create(0,0,NULL,NULL,&other)==0 && other!=low2);
+    restore_tpl(4);assert(n==1 && order[0]==1);
+    assert(check(other)==PWL_EFI_NOT_READY && close(other)==0 && close(low1)==0);
+    assert(wait(0,&plain,&index)==PWL_EFI_INVALID_PARAMETER);
+    assert(wait(1,NULL,&index)==PWL_EFI_INVALID_PARAMETER);
+    assert(wait(1,&plain,NULL)==PWL_EFI_INVALID_PARAMETER);
+    assert(raise_tpl(8)==4 && wait(1,&plain,&index)==PWL_EFI_UNSUPPORTED);restore_tpl(4);
+    list[1]=stale;assert(wait(2,list,&index)==PWL_EFI_INVALID_PARAMETER && index==1);
+    assert(close(plain)==0);
+    run_configurations(code,d);
+    uint64_t all[PWL_RESIDENT_EVENTS];
+    for(size_t i=0;i<PWL_RESIDENT_EVENTS;i++)assert(create(0,0,NULL,NULL,&all[i])==0);
+    assert(create(0,0,NULL,NULL,&output)==PWL_EFI_OUT_OF_RESOURCES && output==123);
+    d->memory.exited=1;
+    assert(create(0,0,NULL,NULL,&output)==PWL_EFI_ACCESS_DENIED);
+    assert(signal(all[0])==PWL_EFI_ACCESS_DENIED && check(all[0])==PWL_EFI_ACCESS_DENIED);
+    assert(close(all[0])==PWL_EFI_ACCESS_DENIED && wait(1,all,&index)==PWL_EFI_ACCESS_DENIED);
+    d->memory.exited=0;
+    for(size_t i=0;i<PWL_RESIDENT_EVENTS;i++)assert(close(all[i])==0);
+    d->event_next_handle=UINT64_MAX;
+    assert(create(0,0,NULL,NULL,&output)==PWL_EFI_OUT_OF_RESOURCES && output==123);
+    assert(!d->event_queue_count[0] && !d->event_queue_count[1]);
+}
+
 static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
 {
     LOAD(install_fn,install,11);LOAD(replace_fn,replace,12);LOAD(remove_fn,remove,13);
     LOAD(handle_fn,handle,14);LOAD(handles_fn,handles,15);LOAD(locate_fn,locate,16);
     LOAD(open_protocol_fn,open,28);LOAD(close_protocol_fn,close_protocol,29);
+    LOAD(handle_buffer_fn,handle_buffer,37);LOAD(protocols_buffer_fn,protocols_buffer,38);
+    LOAD(open_info_fn,open_info,39);LOAD(pool_free_fn,free_pool,10);
     pwl_efi_guid_t a={{1}},b={{2}},unknown={{3}};
     uint64_t first=0,second=0,list[64];void *interface=NULL;
     int one=1,two=2;
@@ -77,6 +258,26 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     assert(open(first,&a,&interface,second,0,2)==0 && interface==&one);
     assert(open(first,&a,&interface,second,0,2)==0);
     assert(open(first,&a,&interface,second,0,1)==0);
+    uint64_t *handle_list=NULL;size_t count=0;
+    assert(handle_buffer(0,NULL,NULL,&count,&handle_list)==0 && count==2);
+    assert(handle_list[0]==first && handle_list[1]==second && free_pool(handle_list)==0);
+    assert(handle_buffer(2,&b,NULL,&count,&handle_list)==0 && count==1 && handle_list[0]==first);
+    assert(free_pool(handle_list)==0);
+    pwl_efi_guid_t **protocol_list=NULL;
+    assert(protocols_buffer(first,&protocol_list,&count)==0 && count==2);
+    assert(!memcmp(protocol_list[0],&a,sizeof(a)) && !memcmp(protocol_list[1],&b,sizeof(b)));
+    pwl_efi_open_info_t *info=NULL;
+    assert(open_info(first,&a,&info,&count)==0 && count==2);
+    assert(info[0].agent_handle==second && info[0].controller_handle==0 && info[0].attributes==2 && info[0].open_count==2);
+    assert(info[1].attributes==1 && info[1].open_count==1 && free_pool(info)==0);
+    assert(open_info(first,&b,&info,&count)==0 && count==0 && !info);
+    assert(open_info(first,&unknown,&info,&count)==PWL_EFI_NOT_FOUND);
+    assert(handle_buffer(2,&unknown,NULL,&count,&handle_list)==PWL_EFI_NOT_FOUND);
+    assert(handle_buffer(1,NULL,&one,&count,&handle_list)==PWL_EFI_UNSUPPORTED);
+    assert(handle_buffer(0,NULL,NULL,NULL,&handle_list)==PWL_EFI_INVALID_PARAMETER);
+    assert(protocols_buffer(UINT64_MAX,&protocol_list,&count)==PWL_EFI_INVALID_PARAMETER);
+    assert(protocols_buffer(first,NULL,&count)==PWL_EFI_INVALID_PARAMETER);
+    assert(open_info(first,&a,NULL,&count)==PWL_EFI_INVALID_PARAMETER);
     assert(close_protocol(first,&a,second,0)==0);
     assert(close_protocol(first,&a,second,0)==PWL_EFI_NOT_FOUND);
     assert(open(first,&a,&interface,0,0,2)==0 && interface==&one);
@@ -102,6 +303,8 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     assert(handle(first,&a,&interface)==0 && interface==&two);
     assert(remove(first,&a,&one)==PWL_EFI_NOT_FOUND);
     assert(remove(first,&a,&two)==0);
+    /* Returned GUIDs are snapshots, retained after registry removal. */
+    assert(!memcmp(protocol_list[0],&a,sizeof(a)) && free_pool(protocol_list)==0);
     uint64_t third=0;
     assert(install(&third,&unknown,0,NULL)==0 && third!=first && third!=second);
     assert(handle(third,&unknown,&interface)==0 && !interface);
@@ -120,11 +323,26 @@ static void run_protocols(unsigned char *code,pwl_resident_data_t *d)
     d->opens[0].count=UINT32_MAX;
     assert(open(all[0],&a,&interface,all[0],0,2)==PWL_EFI_OUT_OF_RESOURCES && interface==&two);
     d->opens[0].count=1;
+    assert(open_info(all[0],&a,&info,&count)==0 && count==PWL_RESIDENT_OPENS);
+    for(size_t i=0;i<count;i++)assert(info[i].agent_handle==all[i] && info[i].open_count==1);
+    assert(free_pool(info)==0);
+    /* Reserve all free pages, then verify failed queries preserve outputs. */
+    LOAD(alloc_fn,allocate,2);LOAD(free_fn,free_pages,3);
+    uint64_t full=0;
+    assert(allocate(PWL_ALLOCATE_ANY,2,16,&full)==0);
+    count=77;info=(void *)(uintptr_t)123;handle_list=(void *)(uintptr_t)456;protocol_list=(void *)(uintptr_t)789;
+    assert(open_info(all[0],&a,&info,&count)==PWL_EFI_OUT_OF_RESOURCES && count==77 && (uintptr_t)info==123);
+    assert(handle_buffer(0,NULL,NULL,&count,&handle_list)==PWL_EFI_OUT_OF_RESOURCES && count==77 && (uintptr_t)handle_list==456);
+    assert(protocols_buffer(all[0],&protocol_list,&count)==PWL_EFI_OUT_OF_RESOURCES && count==77 && (uintptr_t)protocol_list==789);
+    assert(free_pages(full,16)==0);
     d->memory.exited=1;
     assert(handle(all[0],&a,&interface)==PWL_EFI_ACCESS_DENIED);
     assert(remove(all[0],&a,&one)==PWL_EFI_ACCESS_DENIED);
     assert(open(all[0],&a,&interface,all[0],0,2)==PWL_EFI_ACCESS_DENIED);
     assert(close_protocol(all[0],&a,all[0],0)==PWL_EFI_ACCESS_DENIED);
+    assert(open_info(all[0],&a,&info,&count)==PWL_EFI_ACCESS_DENIED);
+    assert(handle_buffer(0,NULL,NULL,&count,&handle_list)==PWL_EFI_ACCESS_DENIED);
+    assert(protocols_buffer(all[0],&protocol_list,&count)==PWL_EFI_ACCESS_DENIED);
     d->memory.exited=0;
     for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) assert(remove(all[i],&a,&one)==0);
     d->protocol_next_handle=UINT64_MAX;
@@ -198,7 +416,9 @@ static void run_copy(void)
     unsigned char *code=mmap(NULL,code_bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     assert(code!=MAP_FAILED && (uintptr_t)code>UINT32_MAX);
     pwl_resident_data_t d={0};
-    pwl_phys_region_t region={UINT64_C(0x27a400000),65536,PWL_MEMORY_FREE};
+    void *heap=mmap(NULL,65536,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    assert(heap!=MAP_FAILED && (uintptr_t)heap>UINT32_MAX);
+    pwl_phys_region_t region={(uintptr_t)heap,65536,PWL_MEMORY_FREE};
     uint64_t cache=8,context=(uintptr_t)&d,pa=0,key=0;
     assert(pwl_fw_memory_init(&d.memory,&region,&cache,1,0x1234)==PWL_OK);
     d.tpl=4;
@@ -235,6 +455,7 @@ static void run_copy(void)
     assert(pool_alloc(2,1,NULL)==PWL_EFI_INVALID_PARAMETER);
     run_protocols(code,&d);
     run_files(code,&d);
+    run_events(code,&d);
     uint32_t result=0;
     assert(crc("123456789",9,&result)==0 && result==UINT32_C(0xcbf43926));
     assert(crc(NULL,9,&result)==PWL_EFI_INVALID_PARAMETER);
@@ -275,6 +496,7 @@ unsigned char *all_scratch=aligned_alloc(4096,4096);
     assert(munmap(stack,stack_bytes+2*guard)==0);
 #endif
     assert(munmap(code,code_bytes)==0);
+    assert(munmap(heap,65536)==0);
 }
 static void test_unsupported_slots(void)
 {
@@ -306,5 +528,5 @@ int main(void)
 {
     resident_image=resident_fixture();
     run_copy();run_copy();test_unsupported_slots();
-    puts("resident callbacks: copied RX code above 4 GiB, Microsoft x64 ABI and nine services passed");
+    puts("resident callbacks: copied RX code, Microsoft AMD64 ABI, memory/protocol/file/event services passed");
 }
