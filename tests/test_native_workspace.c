@@ -392,7 +392,7 @@ static void test_transition_plan(pwl_native_workspace_t *w)
     pwl_efi_entry_context_t entry={0},saved_entry={0};
     if(w->boot_image.entry_address) {
         assert(pwl_native_efi_entry_prepare(w,&resident_image,&plan,tables,&entry)==PWL_OK);
-        assert(entry.entry==w->boot_image.entry_address && entry.image_handle==((pwl_native_data_t *)w->data.prepare_address)->memory.image_handle);
+        assert(entry.entry==w->firmware.physical_address+resident_image.callbacks[53] && entry.image_handle==((pwl_native_data_t *)w->data.prepare_address)->memory.image_handle);
         assert(entry.system_table==((pwl_native_data_t *)w->data.prepare_address)->loaded_image.system_table && !entry.returned);
         saved_entry=entry;
         plan.root+=4096;
@@ -415,7 +415,8 @@ static void test_transition_plan(pwl_native_workspace_t *w)
         snapshot_fixture_read,before,snapshot,8,&dep,1,&span,tables,32,&plan,&entry,&pipeline);
     if(w->boot_image.entry_address) {
         assert(prepared==PWL_OK && pipeline.stage==4 && pipeline.snapshot_count==4 && plan.root==span.physical_address);
-        assert(entry.entry==w->boot_image.entry_address);
+        assert(entry.entry==w->firmware.physical_address+resident_image.callbacks[53]);
+        assert(((pwl_native_data_t *)w->data.prepare_address)->image_mapping.root==plan.root);
     } else assert(prepared==PWL_ERR_INVALID_ARGUMENT && pipeline.stage==3 && !plan.root);
     cpu.cr4|=UINT64_C(1)<<17;
     assert(pwl_native_entry_capture_prepare(w,&resident_image,&cpu,
@@ -585,6 +586,34 @@ static void test_boot_archive(void)
     data->boot_file_record=0;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
     data->boot_file_record=2;
+    /* A fixed console is published only after its complete external linear
+     * framebuffer has actual identity RW/NX mappings with the requested PAT. */
+    unsigned char table_bytes[32*4096] __attribute__((aligned(4096)));
+    pwl_x64_table_page_t tables[32];
+    for (size_t i=0;i<32;i++) tables[i]=(pwl_x64_table_page_t){UINT64_C(0x20000000)+i*4096,(uint64_t *)(void *)(table_bytes+i*4096)};
+    pwl_native_transition_plan_t plan={0};plan.root=tables[0].physical_address;
+    for (size_t i=0;i<w.mapping_count;i++) {
+        const pwl_x64_identity_range_t *m=&w.mappings[i];
+        plan.ranges[plan.range_count++]=(pwl_x64_alias_range_t){m->base,m->base,m->size,m->writable,m->executable,0};
+    }
+    pwl_graphics_spec_t gs={UINT64_C(0x60000000),640*400*4,640,400,640,1,3};
+    /* Put the two additional ranges before the high resident arena. */
+    for (size_t i=plan.range_count;i;i--) plan.ranges[i+1]=plan.ranges[i-1];
+    plan.ranges[0]=(pwl_x64_alias_range_t){plan.root,plan.root,sizeof(table_bytes),1,0,0};
+    plan.ranges[1]=(pwl_x64_alias_range_t){gs.framebuffer,gs.framebuffer,gs.bytes,1,0,3};
+    plan.range_count+=2;
+    assert(pwl_x64_alias_tables_build(plan.ranges,plan.range_count,tables,32,&plan.table_count)==PWL_OK);
+    gs.pat_index=2;
+    assert(pwl_native_graphics_publish(&w,&resident_image,&plan,tables,&gs)==PWL_ERR_BAD_IMAGE && !data->graphics.enabled);
+    gs.pat_index=3;
+    assert(pwl_native_graphics_publish(&w,&resident_image,&plan,tables,&gs)==PWL_OK);
+    assert(data->efi.system.console_out && data->efi.system.console_out==data->efi.system.console_error);
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    pwl_efi_entry_context_t entry;
+    assert(pwl_native_efi_entry_prepare(&w,&resident_image,&plan,tables,&entry)==PWL_OK);
+    data->graphics.mode.framebuffer+=4096;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->graphics.mode.framebuffer-=4096;
     assert(pwl_native_workspace_release(&w)==PWL_OK && !kernel.allocation);
 }
 

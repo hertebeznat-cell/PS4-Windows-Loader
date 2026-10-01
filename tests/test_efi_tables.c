@@ -16,7 +16,7 @@ int main(void)
     assert(pwl_efi_tables_prepare(&s,&t) == PWL_OK);
     good=t;
     for(size_t i=0;i<PWL_EFI_BOOT_SLOTS;i++)assert(i==17 ? t.boot.functions[i]==0 : t.boot.functions[i]!=0);
-    assert(t.boot.functions[22]==s.code_pa+304);
+    for(size_t i=0;i<4;i++)assert(t.boot.functions[22+i]==s.code_pa+(48+i)*16);
     assert(t.boot.functions[43]==s.code_pa+35*16);
     const unsigned event_slots[]={7,10,11,12,43,9,36,35,34,21};
     for(size_t i=0;i<10;i++)assert(t.boot.functions[event_slots[i]]==s.code_pa+(31+i)*16);

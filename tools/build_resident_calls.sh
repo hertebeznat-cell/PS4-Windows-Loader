@@ -24,7 +24,7 @@ gcc -I"$sdk/libPS4/include" -Iloader/include -Ipayload -Ibuild/resident \
  -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
  $defs "-DPS4WL_BUILD_ID=\"$id\"" -c payload/resident_call_probe.c -o "$out/probe.o"
 objects=""
-for unit in main pe_loader handoff paging ps4_binding ps4_memory firmware_memory firmware_files firmware_media efi_tables resident_workspace native_workspace resident_selftest freestanding; do
+for unit in main pe_loader handoff paging ps4_binding ps4_memory firmware_memory firmware_files firmware_media efi_tables graphics resident_workspace native_workspace resident_selftest freestanding; do
  gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector \
   -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables \
   -mno-red-zone -mgeneral-regs-only -fpie -fPIC -Wall -Wextra -Werror \

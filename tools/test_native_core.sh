@@ -14,7 +14,7 @@ sh tools/build_resident.sh
     -DPWL_PS4_MEMORY_HOST_TEST \
     loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c loader/src/paging.c \
     loader/src/ps4_binding.c loader/src/ps4_memory.c loader/src/firmware_media.c \
-    loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
+    loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c loader/src/graphics.c loader/src/resident_workspace.c loader/src/resident_selftest.c \
     loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/handoff.c \
     tests/test_resident_services.c -o build/test-resident-services
 ./build/test-resident-services
@@ -24,6 +24,16 @@ for unit in variables timers; do
         loader/src/efi_tables.c "tests/test_resident_$unit.c" -o "build/test-resident-$unit"
     "./build/test-resident-$unit"
 done
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+    loader/src/efi_tables.c loader/src/handoff.c loader/src/firmware_memory.c \
+    loader/src/image_permissions.c tests/test_resident_images.c tests/resident_image_abi.S -o build/test-resident-images
+./build/test-resident-images
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+    -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+    loader/src/efi_tables.c loader/src/graphics.c loader/src/handoff.c loader/src/firmware_memory.c \
+    tests/test_resident_graphics.c -o build/test-resident-graphics
+./build/test-resident-graphics
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
     loader/src/efi_tables.c tests/test_efi_tables.c -o build/test-efi-tables
@@ -67,7 +77,7 @@ python3 tests/test_pack_files.py
     loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c \
     loader/src/handoff.c loader/src/paging.c loader/src/ps4_binding.c loader/src/ps4_memory.c \
     loader/src/firmware_memory.c loader/src/firmware_files.c loader/src/firmware_media.c loader/src/efi_tables.c \
-    loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
+    loader/src/graphics.c loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace
 

@@ -23,6 +23,7 @@ pwl_status_t pwl_native_entry_capture_prepare(
     if(status==PWL_OK) {
         report->stage=3;
         status=pwl_native_efi_entry_prepare(w,image,plan,tables,entry);
+        if(status==PWL_OK)status=pwl_native_image_mapping_bind(w,image,plan,tables);
     }
     if(status!=PWL_OK) {plan->root=0;plan->range_count=0;plan->table_count=0;}
     else report->stage=4;

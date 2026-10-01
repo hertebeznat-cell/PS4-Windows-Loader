@@ -9,9 +9,9 @@ _Static_assert(offsetof(pwl_efi_system_table_t, boot_services) == 96, "Boot Serv
 _Static_assert(offsetof(pwl_efi_boot_table_t, functions) == 24, "Boot Services slots");
 
 static const unsigned slots[PWL_EFI_BOOT_CALLBACKS] =
-    {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37,32,33,7,10,11,12,43,9,36,35,34,21,8,28,29};
+    {0,1,2,3,4,26,40,41,42,5,6,13,14,15,16,19,37,32,33,7,10,11,12,43,9,36,35,34,21,8,28,29,22,23,24,25};
 static const unsigned callback_indices[PWL_EFI_BOOT_CALLBACKS] =
-    {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,28,29,31,32,33,34,35,36,37,38,39,40,45,46,47};
+    {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,28,29,31,32,33,34,35,36,37,38,39,40,45,46,47,48,49,50,51};
 
 uint32_t pwl_efi_crc32(const void *bytes, size_t size)
 {

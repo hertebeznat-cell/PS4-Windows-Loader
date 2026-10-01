@@ -3,9 +3,24 @@
 `pwl_native_efi_entry_prepare` connects an audited resident workspace and its
 independent transition plan to an EFI entry context. It retains all resident
 mappings with exact physical addresses, supervisor permissions and PAT index
-zero. The entry is the relocated application's audited entry; ImageHandle and
-SystemTable come from the resident firmware metadata. Output is unchanged when
+zero. The entry is now the resident `pwl_resident_boot_entry` wrapper, which calls
+StartImage for the audited preloaded application. ImageHandle and SystemTable
+come from the resident firmware metadata. The shared lifecycle handles both
+normal return and the application's Exit call; the preloaded PE span stays
+reserved for the outer arena owner. Output is unchanged when
 validation fails. An absent application or a mismatched plan is refused.
+
+`pwl_native_image_mapping_bind` validates identity RW/NX mappings for the
+contiguous final table pool and records that inactive root in resident state.
+The entry capture pipeline performs this binding after preparing the context.
+The permission adapter still refuses actual execution unless the live CPU
+matches that root, including CPL0, NXE, usable SSE state, no PCID/PGE/LA57 and
+clear IF/DF. The preparation result is not an authorization or a hardware
+readiness certificate. See [resident applications](RESIDENT_IMAGES.md).
+
+An optional [fixed framebuffer console](RESIDENT_GRAPHICS.md) is published only
+after all framebuffer pages are checked in the final root. Subsequent entry
+preparation rechecks those identity addresses, RW/NX permissions and PAT index.
 
 `pwl_x64_efi_entry_call` is a position-independent SysV callback suitable for the
 existing controlled address-call primitive. It passes ImageHandle in RCX and

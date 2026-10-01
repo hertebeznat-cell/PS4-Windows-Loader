@@ -29,8 +29,18 @@ for i in range(count):
 if subprocess.check_output(['nm', '-u', str(p/'resident.elf')]).strip():
     raise SystemExit('Unresolved imports')
 dis = (p/'DISASSEMBLY.txt').read_text()
-if re.search(r'\b(syscall|sysenter|cli|sti|hlt|rdmsr|wrmsr)\b|%cr[0-9]', dis):
-    raise SystemExit('Unexpected CPU/process instruction')
+current_function = ''
+for line in dis.splitlines():
+    label = re.match(r'^[0-9a-f]+ <([^>]+)>:', line)
+    if label:
+        current_function = label.group(1)
+    if re.search(r'\b(syscall|sysenter|cli|sti|hlt|wrmsr)\b', line):
+        raise SystemExit('Unexpected CPU/process instruction')
+    if re.search(r'\b(rdmsr|invlpg)\b|%cr[0-9]', line):
+        if current_function != 'pwl_resident_image_map':
+            raise SystemExit('Privileged instruction outside isolated image mapping adapter')
+        if re.search(r',%cr[0-9]', line):
+            raise SystemExit('Image mapping adapter must never write control registers')
 names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'get_memory_map', 'exit_boot_services', 'calculate_crc32', 'copy_mem', 'set_mem',
          'allocate_pool', 'free_pool', 'install_protocol', 'reinstall_protocol',
@@ -41,7 +51,9 @@ names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'check_event', 'create_event_ex', 'wait_for_event', 'locate_handle_buffer', 'protocols_per_handle',
          'open_protocol_information', 'install_configuration_table', 'get_variable',
          'get_next_variable_name', 'set_variable', 'query_variable_info', 'set_timer', 'stall',
-         'set_watchdog_timer']
+         'set_watchdog_timer', 'load_image', 'start_image', 'exit_image', 'unload_image', 'image_map', 'boot_entry',
+         'gop_query', 'gop_set', 'gop_blt', 'text_reset', 'text_output', 'text_test', 'text_query',
+         'text_set', 'text_attribute', 'text_clear', 'text_position', 'text_cursor']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()

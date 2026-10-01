@@ -3,6 +3,8 @@
 #include "pwl_firmware.h"
 #include "pwl_efi_tables.h"
 #include "pwl_files.h"
+#include "pwl_pe_loader.h"
+#include "pwl_graphics.h"
 #define PWL_RESIDENT_FILES 32U
 typedef struct pwl_efi_file_protocol {
     uint64_t revision,functions[10];
@@ -75,6 +77,29 @@ typedef struct pwl_resident_clock {
     uint64_t frequency_hz, last_tsc;
     unsigned ready;
 } pwl_resident_clock_t;
+#define PWL_RESIDENT_APPLICATIONS 8U
+typedef struct pwl_image_mapping {
+    uint64_t root, tables_base, tables_bytes, heap_base, heap_bytes;
+    uint64_t boot_base, boot_bytes; /* Preloaded application, never freeable by child services. */
+    uint64_t permission_callback; /* Audited resident destination; zero disables LoadImage. */
+} pwl_image_mapping_t;
+typedef struct pwl_image_jump {
+    uint64_t gpr[8]; /* RBX, RBP, R12..R15, RSP, RIP. */
+    unsigned char xmm[160]; /* Microsoft ABI nonvolatile XMM6..15. */
+    uint32_t mxcsr;
+    uint16_t fpcw, padding;
+} pwl_image_jump_t;
+_Static_assert(offsetof(pwl_image_jump_t,xmm)==64 && offsetof(pwl_image_jump_t,mxcsr)==224 &&
+    offsetof(pwl_image_jump_t,fpcw)==228 && sizeof(pwl_image_jump_t)==232,"Image jump AMD64 layout");
+typedef struct pwl_resident_application {
+    pwl_pe_loaded_t mapped;
+    pwl_efi_loaded_image_t protocol;
+    pwl_image_jump_t jump;
+    uint64_t handle, previous, exit_status, exit_data;
+    size_t exit_bytes;
+    unsigned running, quarantined, initial;
+    unsigned char path[520];
+} pwl_resident_application_t;
 typedef struct pwl_resident_data {
     pwl_fw_memory_t memory;
     pwl_fw_media_t media;
@@ -92,6 +117,11 @@ typedef struct pwl_resident_data {
     uint32_t boot_file_record;
     pwl_resident_variable_t variables[PWL_RESIDENT_VARIABLES];
     pwl_resident_clock_t clock; /* Must be explicitly calibrated/validated by platform preparation. */
+    pwl_image_mapping_t image_mapping;
+    uint64_t applications[PWL_RESIDENT_APPLICATIONS]; /* Owned pool addresses. */
+    uint64_t current_application;
+    pwl_resident_application_t initial_application;
+    pwl_resident_graphics_t graphics;
     pwl_efi_configuration_t configuration[PWL_RESIDENT_CONFIGURATIONS];
     pwl_resident_event_t events[PWL_RESIDENT_EVENTS];
     uint64_t event_next_handle;

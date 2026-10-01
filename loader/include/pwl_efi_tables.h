@@ -6,9 +6,9 @@
  * pointers. This is an incomplete preparation fixture, not callable firmware.
  */
 #define PWL_EFI_BOOT_SLOTS 44U
-#define PWL_EFI_PREPARED_CALLBACKS 48U
+#define PWL_EFI_PREPARED_CALLBACKS 66U
 #define PWL_EFI_RUNTIME_SLOTS 14U
-#define PWL_EFI_BOOT_CALLBACKS 32U
+#define PWL_EFI_BOOT_CALLBACKS 36U
 typedef struct pwl_efi_header {
     uint64_t signature;
     uint32_t revision, header_size, crc32, reserved;
@@ -46,12 +46,18 @@ typedef struct pwl_efi_prepared_tables {
  * Offsets 28/29: OpenProtocol, CloseProtocol (query modes only).
  * Offset 30: assembly EFI_UNSUPPORTED adapter for unimplemented Boot Services.
  * Offsets 31..36: CreateEvent, SignalEvent, CloseEvent, CheckEvent,
- * CreateEventEx, WaitForEvent (cooperative, non-timer events).
+ * CreateEventEx, WaitForEvent (cooperative events, optional calibrated timers).
  * Offsets 37..40: LocateHandleBuffer, ProtocolsPerHandle,
  * OpenProtocolInformation, InstallConfigurationTable.
  * Offsets 41..44: GetVariable, GetNextVariableName, SetVariable,
  * QueryVariableInfo (volatile boot-only storage; Runtime table unpublished).
  * Offsets 45..47: SetTimer, Stall, SetWatchdogTimer (disable only).
+ * Offsets 48..51: LoadImage, StartImage, Exit, UnloadImage (EFI applications).
+ * Offset 52: private owned-page permission adapter, not a Boot Services slot.
+ * Offset 53: private preloaded application entry through StartImage.
+ * Offsets 54..56: GOP QueryMode, SetMode, Blt.
+ * Offsets 57..65: SimpleTextOutput Reset, OutputString, TestString, QueryMode,
+ * SetMode, SetAttribute, ClearScreen, SetCursorPosition, EnableCursor.
  * Caller must independently establish code provenance, relocations and ABI.
  */
 typedef struct pwl_efi_table_spec {

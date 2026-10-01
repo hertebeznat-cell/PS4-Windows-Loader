@@ -58,11 +58,11 @@ Notification functions and their contexts are caller-provided pointers and must
 stay mapped in the native address space for their complete lifetime. No pointer
 to a host process service is introduced by this module.
 
-The image exports 48 linked entries, retaining offsets 0..30, including the
+The image exports 66 linked entries, retaining offsets 0..30, including the
 error adapter at 30. New events are 31..36 and discovery/configuration methods
 are 37..40. Variable methods are 41..44 and timer/delay/watchdog-disable are 45..47.
-There are 32 dedicated Boot table destinations (including the
-existing ExitBootServices refusal), 11 generic error destinations and one null
+There are 36 dedicated Boot table destinations (including the
+existing ExitBootServices refusal), 7 generic error destinations and one null
 Reserved field. The previous All30 mask and hardware evidence remain unchanged;
 they do not validate these new entries on PS4.
 

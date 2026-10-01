@@ -85,7 +85,15 @@ pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *a
         unsigned char *binding=(unsigned char *)w->firmware.prepare_address+blob->binding_offset;
         for (unsigned i=0;i<8;i++) binding[i]=(unsigned char)(w->data.physical_address>>(8*i));
         d->tpl=4;
+        d->image_mapping.heap_base=w->heap.physical_address;
+        d->image_mapping.heap_bytes=w->heap.size;
+        d->image_mapping.boot_base=w->boot.physical_address;
+        d->image_mapping.boot_bytes=w->boot.size;
+        d->image_mapping.permission_callback=w->firmware.physical_address+blob->callbacks[52];
         if (w->boot.size) {
+            d->initial_application.mapped=w->boot_image;
+            d->initial_application.handle=r->image_handle;
+            d->initial_application.initial=1;
             d->loaded_image=(pwl_efi_loaded_image_t){0};
             d->loaded_image.revision=0x1000;
             d->loaded_image.system_table=w->data.physical_address+
@@ -219,6 +227,23 @@ pwl_status_t pwl_native_resident_environment_validate(
         if (actual[i]!=expected) return PWL_ERR_INVALID_ARGUMENT;
     }
     const pwl_native_data_t *data=w->data.prepare_address;
+    if (data->image_mapping.heap_base!=w->heap.physical_address ||
+        data->image_mapping.heap_bytes!=w->heap.size ||
+        data->image_mapping.boot_base!=w->boot.physical_address ||
+        data->image_mapping.boot_bytes!=w->boot.size ||
+        data->image_mapping.permission_callback!=w->firmware.physical_address+image->callbacks[52])
+        return PWL_ERR_INVALID_ARGUMENT;
+    /* The mutable transition table binding has its own plan/ownership audit in
+     * pwl_native_image_mapping_bind. It does not certify CPU entry readiness. */
+    if (w->boot.size) {
+        if (data->initial_application.handle!=data->memory.image_handle ||
+            data->initial_application.initial!=1 || data->initial_application.running ||
+            data->initial_application.quarantined) return PWL_ERR_INVALID_ARGUMENT;
+        const unsigned char *a=(const void *)&data->initial_application.mapped;
+        const unsigned char *b=(const void *)&w->boot_image;
+        for (size_t i=0;i<sizeof(w->boot_image);i++) if (a[i]!=b[i]) return PWL_ERR_INVALID_ARGUMENT;
+    } else if (data->initial_application.handle || data->initial_application.initial)
+        return PWL_ERR_INVALID_ARGUMENT;
     if (data->media.physical_address!=w->media.physical_address ||
         !data->media.bytes || data->media.bytes>w->media.size ||
         data->media.block_size!=512 || data->media.bytes%512)
@@ -292,5 +317,33 @@ pwl_status_t pwl_native_resident_environment_validate(
     pwl_efi_table_spec_t spec={w->firmware.physical_address,image->size,
         w->data.physical_address+offsetof(pwl_native_data_t,efi),sizeof(data->efi),{0}};
     for (size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=image->callbacks[i];
-    return pwl_efi_tables_validate(&spec,&data->efi);
+    if (!data->graphics.enabled) return pwl_efi_tables_validate(&spec,&data->efi);
+    uint64_t destination=w->data.physical_address+offsetof(pwl_native_data_t,graphics);
+    pwl_resident_graphics_t expected;
+    if (pwl_graphics_prepare(&w->graphics_spec,&spec,destination,&expected)!=PWL_OK)
+        return PWL_ERR_INVALID_ARGUMENT;
+    const unsigned char *ga=(const void *)&expected,*gb=(const void *)&data->graphics;
+    for (size_t i=0;i<sizeof(expected);i++) if (ga[i]!=gb[i]) return PWL_ERR_INVALID_ARGUMENT;
+    static const pwl_efi_guid_t gop={{0xde,0xa9,0x42,0x90,0xdc,0x23,0x38,0x4a,0x96,0xfb,0x7a,0xde,0xd0,0x80,0x51,0x6a}};
+    static const pwl_efi_guid_t text={{0xc2,0x77,0x74,0x38,0xc7,0x69,0xd2,0x11,0x8e,0x39,0,0xa0,0xc9,0x69,0x72,0x3b}};
+    uint64_t handle=data->efi.system.console_out_handle;unsigned found=0;
+    if (!handle || data->efi.system.console_error_handle!=handle ||
+        data->efi.system.console_out!=destination+offsetof(pwl_resident_graphics_t,text) ||
+        data->efi.system.console_error!=data->efi.system.console_out) return PWL_ERR_INVALID_ARGUMENT;
+    for (size_t i=0;i<PWL_RESIDENT_PROTOCOLS;i++) {
+        const pwl_resident_protocol_t *p=&data->protocols[i];
+        if (p->handle!=handle) continue;
+        unsigned eg=1,et=1;
+        for (size_t j=0;j<16;j++) { if (p->guid.bytes[j]!=gop.bytes[j]) eg=0;if (p->guid.bytes[j]!=text.bytes[j]) et=0; }
+        if (eg && p->interface_address==destination+offsetof(pwl_resident_graphics_t,gop)) found|=1;
+        if (et && p->interface_address==destination+offsetof(pwl_resident_graphics_t,text)) found|=2;
+    }
+    if (found!=3) return PWL_ERR_INVALID_ARGUMENT;
+    pwl_efi_prepared_tables_t canonical=data->efi;
+    uint32_t crc=canonical.system.header.crc32;canonical.system.header.crc32=0;
+    if (pwl_efi_crc32(&canonical.system,sizeof(canonical.system))!=crc) return PWL_ERR_INVALID_ARGUMENT;
+    canonical.system.console_out_handle=canonical.system.console_out=0;
+    canonical.system.console_error_handle=canonical.system.console_error=0;
+    canonical.system.header.crc32=pwl_efi_crc32(&canonical.system,sizeof(canonical.system));
+    return pwl_efi_tables_validate(&spec,&canonical);
 }

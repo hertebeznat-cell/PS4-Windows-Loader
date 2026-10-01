@@ -74,10 +74,12 @@ preparation flow in one transaction:
    error and retain ownership. `kmem_free` returns void; no kernel free errno
    or recovery from a non-returning kernel fault is claimed.
 
-The heap currently remains NX. Memory-type changes in the resident manager
-do not change PTE permissions. Before loading executable child images, the
-future EFI image layer must set/verify executable mappings and invalidate TLBs
-in the controlled context. This is another reason the substrate is not an
+The free heap remains NX. Memory-type changes alone do not change PTE
+permissions. The [resident application layer](RESIDENT_IMAGES.md) now copies
+and relocates children, checks their complete mapping before changing PTEs,
+publishes RX code/RW NX data and invalidates each changed local translation.
+It refuses the current process context and requires the final private root and
+an already established CPU/device ownership contract. This is another reason the substrate is not an
 EFI launcher. PAT index zero and effective MTRR cacheability must be checked
 against the WB allocation before these tables can be activated.
 

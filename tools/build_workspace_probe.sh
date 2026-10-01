@@ -59,7 +59,7 @@ gcc -I"$sdk/libPS4/include" -Ipayload -Os -std=c11 -ffreestanding \
  -ffunction-sections -fdata-sections -masm=intel -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
  $probe_defs $defs "-DPS4WL_BUILD_ID=\"$id\"" -c "$probe_source" -o "$out/probe.o"
 objects=""
-for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_files firmware_media efi_tables resident_workspace native_workspace freestanding; do
+for unit in main pe_loader handoff paging ps4_memory firmware_memory firmware_files firmware_media efi_tables graphics resident_workspace native_workspace freestanding; do
  gcc -std=c11 -Os -ffreestanding -fno-builtin -fno-stack-protector -fno-tree-loop-distribute-patterns \
   -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only \
   -fpie -fPIC -Wall -Wextra -Werror -Iloader/include -c "loader/src/$unit.c" -o "$out/$unit.o"

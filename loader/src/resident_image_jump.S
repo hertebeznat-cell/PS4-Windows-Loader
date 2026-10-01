@@ -1,0 +1,57 @@
+.text
+.globl pwl_image_save
+.hidden pwl_image_save
+.type pwl_image_save,@function
+pwl_image_save:
+    movq %rbx,0(%rdi)
+    movq %rbp,8(%rdi)
+    movq %r12,16(%rdi)
+    movq %r13,24(%rdi)
+    movq %r14,32(%rdi)
+    movq %r15,40(%rdi)
+    leaq 8(%rsp),%rax
+    movq %rax,48(%rdi)
+    movq (%rsp),%rax
+    movq %rax,56(%rdi)
+    movdqu %xmm6,64(%rdi)
+    movdqu %xmm7,80(%rdi)
+    movdqu %xmm8,96(%rdi)
+    movdqu %xmm9,112(%rdi)
+    movdqu %xmm10,128(%rdi)
+    movdqu %xmm11,144(%rdi)
+    movdqu %xmm12,160(%rdi)
+    movdqu %xmm13,176(%rdi)
+    movdqu %xmm14,192(%rdi)
+    movdqu %xmm15,208(%rdi)
+    stmxcsr 224(%rdi)
+    fnstcw 228(%rdi)
+    xorl %eax,%eax
+    ret
+.size pwl_image_save,.-pwl_image_save
+.globl pwl_image_resume
+.hidden pwl_image_resume
+.type pwl_image_resume,@function
+pwl_image_resume:
+    movq 0(%rdi),%rbx
+    movq 8(%rdi),%rbp
+    movq 16(%rdi),%r12
+    movq 24(%rdi),%r13
+    movq 32(%rdi),%r14
+    movq 40(%rdi),%r15
+    movdqu 64(%rdi),%xmm6
+    movdqu 80(%rdi),%xmm7
+    movdqu 96(%rdi),%xmm8
+    movdqu 112(%rdi),%xmm9
+    movdqu 128(%rdi),%xmm10
+    movdqu 144(%rdi),%xmm11
+    movdqu 160(%rdi),%xmm12
+    movdqu 176(%rdi),%xmm13
+    movdqu 192(%rdi),%xmm14
+    movdqu 208(%rdi),%xmm15
+    ldmxcsr 224(%rdi)
+    fldcw 228(%rdi)
+    movq 48(%rdi),%rsp
+    movl $1,%eax
+    jmp *56(%rdi)
+.size pwl_image_resume,.-pwl_image_resume
+.section .note.GNU-stack,"",@progbits

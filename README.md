@@ -332,7 +332,7 @@ limit was raised from 128 to 256 records to retain all 197 records (148 files).
 See [EFI_ARCHIVE_AUDIT](docs/EFI_ARCHIVE_AUDIT.md). No Microsoft code was executed.
 
 Unimplemented Boot Services now have a resident EFI_UNSUPPORTED adapter instead
-of null callable pointers; the reserved field stays zero. The image exports 48
+of null callable pointers; the reserved field stays zero. The image exports 66
 entry symbols, preserving the previous 30 callback indices. Ten new destinations
 implement software event creation/signaling/checking/closing/grouping/cooperative
 waiting, allocated protocol/handle/open-record queries, and configuration-table
@@ -345,3 +345,23 @@ runtime/automatic lifecycle signaling and interrupt-driven timers remain absent.
 [RESIDENT_EVENT_SERVICES](docs/RESIDENT_EVENT_SERVICES.md) and
 [BOOT_SERVICE_FALLBACK](docs/BOOT_SERVICE_FALLBACK.md). Missing runtime/console
 interfaces and the console transition still prevent a complete Boot Manager entry.
+
+## Resident application launch and fixed console · 1 October 2026
+
+The native entry preparation now targets a resident StartImage wrapper for the
+preloaded application. LoadImage/StartImage/Exit/UnloadImage support real child
+PE execution, nested calls, copied exit data, safe release and transactional
+RX/RW NX permission changes. A conditional GOP/SimpleTextOutput backend supplies
+all four BLT operations, text rendering, colors, cursor and scrolling after a
+real framebuffer is provided and verified in the final root. Native host tests
+execute copied RX services and relocated PE fixtures; no emulator or Microsoft
+code runs in those tests.
+
+**A full native PS4 launch is not ready.** The console main entry remains
+preflight; production binding, complete memory/device inventory, CPU/exception/FP
+ownership, AP/DMA handoff, actual video capture, runtime/platform services and
+ExitBootServices are still incomplete. Existing successful console tests do not
+prove those inputs. No new boot binary or repeated console test is proposed.
+See [RESIDENT_IMAGES](docs/RESIDENT_IMAGES.md),
+[RESIDENT_GRAPHICS](docs/RESIDENT_GRAPHICS.md) and the exact
+[remaining launch requirements](docs/NATIVE_LAUNCH_STATUS.md).

@@ -3,9 +3,9 @@
 This change adds seven linked resident entry points without process imports:
 GetVariable, GetNextVariableName, SetVariable, QueryVariableInfo, SetTimer,
 Stall and SetWatchdogTimer. Offsets 0..40 remain unchanged; new offsets are
-41..47 in that order. The image has 48 linked entries. Boot Services has 32
+41..47 in that order. The image has 66 linked entries. Boot Services has 32
 dedicated destinations (including the existing ExitBootServices refusal),
-11 generic EFI_UNSUPPORTED destinations and the null Reserved field.
+7 generic EFI_UNSUPPORTED destinations and the null Reserved field.
 
 ## Variables
 
@@ -88,7 +88,8 @@ group signaling, invalid/regressing clock refusal and retirement.
 The host clock function is not part of the resident image. Tests use the CPU
 directly, without emulators. The full ASan/UBSan suite and native development
 build pass locally. No new PS4 result, complete Runtime Services publication,
-hardware timer interrupt, child image execution or Boot Manager entry is claimed.
+hardware timer interrupt or PS4 Boot Manager entry is claimed. Separate
+[resident application tests](RESIDENT_IMAGES.md) now execute native PE fixtures.
 
 Clang lowers large variable-slot clearing to a memset call even in freestanding
 mode. The resident link includes the repository's own freestanding byte-operation

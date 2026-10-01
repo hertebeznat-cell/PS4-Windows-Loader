@@ -39,6 +39,7 @@ typedef struct pwl_native_workspace {
     size_t mapping_count;
     pwl_x64_table_page_t tables[PWL_NATIVE_MAX_TABLES];
     size_t table_count;
+    pwl_graphics_spec_t graphics_spec; /* Preparation owner records the explicit external framebuffer. */
 } pwl_native_workspace_t;
 
 /* Performs allocation -> physical verification -> resident copies -> memory
