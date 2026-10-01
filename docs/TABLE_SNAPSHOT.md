@@ -38,3 +38,31 @@ capacity failure, reader errors, changed pages and malformed inputs. Integration
 checks run capture -> resident plan -> relocated EFI arguments, and verify that
 an unsupported PCID mode fails before capture. Native-core compilation is
 freestanding, with no unresolved imports.
+
+## Console reader adapter
+
+The native development core now includes `payload/table_snapshot_io.c`.
+`pwl_console_table_reader_prepare` accepts an explicitly supplied translator,
+pmap, current CPU snapshot and runtime direct-map indices. It checks the kernel
+root alias and active-root alias through translation of both endpoints. It
+neither locates kernel symbols nor approves a production memory binding.
+
+`pwl_console_table_read` is the physical-page callback for the capture pipeline.
+It requires CPL0, verifies current CR3, resolves a page through the same-build
+32 GiB direct-map window, checks both physical endpoint translations, copies
+512 volatile u64s and rechecks CR3 and translations. Unknown/out-of-window frames
+are refused before copying. `pwl_console_table_snapshot_capture` connects this
+reader directly to full reachable-table capture. The generic entry pipeline can
+use the same callback/context for capture -> plan -> EFI arguments.
+
+Translator and pmap lifetime, CPU affinity and concurrent mapping ownership are
+still platform responsibilities. Endpoint translation checks do not eliminate
+all races or provide exception recovery. This adapter must not be used to assume
+that arbitrary source memory can be read faultlessly. It deliberately does not
+activate the independent root, enter EFI or publish guessed production bindings.
+There is still no console entry caller for the native preparation pipeline.
+
+Host tests exercise dynamic direct-map indices, addresses above 4 GiB, endpoint
+mismatch, out-of-window/alignment refusal and PCID refusal. The privileged copy
+is compiled freestanding, but is not executed on the host. The host-only fixture
+is prohibited in freestanding builds. This adapter has not been tested on PS4.

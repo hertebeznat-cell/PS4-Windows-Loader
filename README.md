@@ -322,3 +322,7 @@ Full reachable page-table capture is now connected to independent plan and EFI
 argument preparation in one transaction. See [TABLE_SNAPSHOT](docs/TABLE_SNAPSHOT.md).
 This does not supply the console physical reader or guarantee complete handler
 and stack dependencies; CPU entry remains unconnected.
+The console page-reader adapter is included in the native development core,
+checking physical translations at both page endpoints and CR3 before/after reads.
+Its capture entry connects to the full table collector. It has not yet run on
+PS4 and does not establish snapshot quiescence or launch Windows.

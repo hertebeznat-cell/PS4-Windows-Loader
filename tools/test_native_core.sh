@@ -116,3 +116,17 @@ python3 tests/test_pack_files.py
  -fno-omit-frame-pointer -Iloader/include loader/src/table_snapshot.c \
  loader/src/transition_map.c tests/test_table_snapshot.c -o build/test-table-snapshot
 ./build/test-table-snapshot
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer -DPWL_TABLE_READER_HOST_TEST -Iloader/include -Ipayload \
+ loader/src/cpu_state.c loader/src/root_clone.c payload/table_snapshot_io.c \
+ tests/test_table_reader.c -o build/test-table-reader
+./build/test-table-reader
+"$compiler" -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -ffreestanding \
+ -fno-builtin -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
+ -Iloader/include -Ipayload -c payload/table_snapshot_io.c -o build/console-table-reader.o
+if "$compiler" -std=c11 -ffreestanding -DPWL_TABLE_READER_HOST_TEST \
+ -Iloader/include -Ipayload -c payload/table_snapshot_io.c -o build/forbidden-table-reader.o \
+ 2>build/table-reader-rejection.txt; then
+ echo 'Host reader fixture compiled freestanding' >&2; exit 1
+fi
