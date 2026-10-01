@@ -300,3 +300,16 @@ USB archive preloading is connected to owned boot-image preparation through `pwl
 The 2026-10-01 PS4 All30 photographs confirm all thirty returning callback checks; see [hardware result](docs/EFI_ALL30.md). Independent-root mapping continuity checks are implemented separately in [transition mappings](docs/TRANSITION_MAP.md); no independent-root activation is claimed.
 
 AMD64 exception-context decoding and a returning GDT/IDT/TSS/PAT observer are available in [exception context](docs/EXCEPTION_CONTEXT.md). They collect missing descriptor and stack facts without changing CPU tables or calling Windows.
+
+The 2026-10-01 exception-context observation passed on hardware (23 photographs,
+rc=0 stage=4 error=0 unlock=0); no repeat is requested. Independent high/low
+virtual mappings can now be constructed and verified from explicit manifests,
+including PAT indices, guard gaps and physical alias conflict checks. See
+[ALIAS_MAP](docs/ALIAS_MAP.md) and [EXCEPTION_CONTEXT](docs/EXCEPTION_CONTEXT.md).
+This construction is not connected to CPU entry; Windows Boot Manager has not
+been launched.
+The resident transition preparation API now combines the audited EFI workspace
+with explicit high-address dependencies in a separate root, preserving the old
+workspace and checking each dependency against old/new table snapshots. It does
+not activate that root; complete live dependency capture and firmware ownership
+of the second table span are still required.

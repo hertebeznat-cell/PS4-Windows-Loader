@@ -32,3 +32,16 @@ page cannot stand in for its complete code/data dependencies.
 
 This gathers different missing facts; the passed All30 test is not repeated.
 Do not modify the USB's Windows files. On a hang, do not repeat the run.
+
+## Hardware observation, 2026-10-01
+
+All 23 supplied photographs of build
+594a017c7b67783f69b65ac3cf6b31da8f4b300e were inspected. The observation returned
+rc=0 stage=4 error=0 unlock=0, with CR3 ac5a000 at both endpoints. GDT, IDT,
+selected TSS, stack fields and all five requested gates were reported.
+The test passed; repeating this observation is unnecessary.
+
+This confirms successful observation and decoding on the console. It does not
+confirm independent-root execution, complete handler dependencies or Windows
+Boot Manager entry. Live addresses must be captured again by the implementation
+when preparing a transition; the photographed addresses must not be hardcoded.

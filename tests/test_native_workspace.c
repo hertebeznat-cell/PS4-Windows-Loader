@@ -1,5 +1,6 @@
 #include "pwl_native_workspace.h"
 #include "pwl_boot_source.h"
+#include "pwl_native_transition.h"
 #include "pe_fixture.h"
 #include "resident_fixture.h"
 static pwl_resident_image_t resident_image;
@@ -355,6 +356,51 @@ static void test_resident_boot_image(void)
     assert(!kernel.allocation && kernel.frees==frees+2);
 }
 
+static void test_transition_plan(pwl_native_workspace_t *w)
+{
+    static uint64_t old[4][512];
+    pwl_x64_table_page_t before[4], tables[32];
+    pwl_native_transition_plan_t plan={0};
+    const uint64_t va=UINT64_C(0xffffff8000000000),pa=UINT64_C(0x1000000000);
+    void *buffer=aligned_alloc(4096,32*4096);
+    assert(buffer);
+    pwl_owned_span_t span={buffer,UINT64_C(0x350000000),32*4096};
+    memset(old,0,sizeof(old));
+    for(size_t i=0;i<4;i++) before[i]=(pwl_x64_table_page_t){0x1000+i*4096,old[i]};
+    old[0][511]=0x2003;old[1][0]=0x3003;old[2][0]=0x4003;old[3][0]=pa|1;
+    pwl_x64_alias_range_t dep={va,pa,4096,0,1,0};
+    size_t original_count=w->table_count;
+    uint64_t original_root=w->tables[0].entries[0];
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&span,tables,32,&plan)==PWL_OK);
+    assert(plan.root==span.physical_address && plan.table_count>0);
+    assert(pwl_x64_alias_tables_validate(plan.ranges,plan.range_count,tables,plan.table_count)==PWL_OK);
+    pwl_x64_translation_t x;
+    assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->firmware.physical_address,&x)==PWL_OK && x.executable && !x.writable);
+    assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->stack.physical_address,&x)==PWL_OK && !x.executable && x.writable);
+    assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->stack.physical_address-4096,&x)!=PWL_OK);
+    assert(pwl_x64_translate(tables,plan.table_count,plan.root,w->stack.physical_address+w->stack.size,&x)!=PWL_OK);
+    assert(pwl_x64_translate(tables,plan.table_count,plan.root,va+23,&x)==PWL_OK && x.physical_address==pa+23);
+    assert(w->table_count==original_count && w->tables[0].entries[0]==original_root);
+    assert(pwl_native_resident_environment_validate(w,&resident_image)==PWL_OK);
+    old[3][0]|=8;
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&span,tables,32,&plan)==PWL_ERR_BAD_IMAGE);
+    assert(!plan.root && !plan.table_count && !plan.range_count);
+    old[3][0]=pa|1; dep.physical_address+=4096;
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&span,tables,32,&plan)==PWL_ERR_BAD_IMAGE);
+    dep.physical_address=w->stack.physical_address-4096;
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&span,tables,32,&plan)==PWL_ERR_INVALID_ARGUMENT);
+    dep.physical_address=pa;
+    pwl_owned_span_t short_span={buffer,span.physical_address,4096};
+    assert(pwl_native_transition_plan_prepare(w,&resident_image,before,4,0x1000,
+        &dep,1,&short_span,tables,1,&plan)==PWL_ERR_BUFFER_TOO_SMALL);
+    assert(!plan.root && !plan.table_count);
+    free(buffer);
+}
+
 static void test_resident_files(void)
 {
     unsigned char archive[4096]={0};
@@ -371,6 +417,7 @@ static void test_resident_files(void)
     assert(data->protocols[1].interface_address==w.data.physical_address+
            offsetof(pwl_native_data_t,filesystem));
     assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    test_transition_plan(&w);
     data->files_enabled=0;
     assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
     data->files_enabled=1;data->media.bytes=UINT64_MAX;
