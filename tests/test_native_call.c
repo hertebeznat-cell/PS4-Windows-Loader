@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include "rx_test_mapping.h"
 int pwl_test_fp_roundtrip(void *,void *,uint64_t,uint64_t);
 int main(void)
 {
@@ -14,7 +15,7 @@ int main(void)
     uintptr_t start;memcpy(&start,&original,sizeof(start));
     size_t length=(uintptr_t)pwl_x64_native_call_end-start;
     assert(length && length<8192);
-    void *code=mmap(NULL,8192,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    void *code=rx_test_allocate(8192);
     void *guard=mmap(NULL,4096,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     assert(code!=MAP_FAILED && guard!=MAP_FAILED);
     memcpy(code,(const void *)start,length);assert(mprotect(code,8192,PROT_READ|PROT_EXEC)==0);
@@ -24,7 +25,7 @@ int main(void)
     pwl_native_call_t record;memset(&record,0x55,sizeof(record));
     pwl_native_call_t previous=record;
     assert(copied(&record)==PWL_ERR_ACCESS_DENIED && !memcmp(&record,&previous,sizeof(record)));
-    assert(munmap(code,8192)==0 && munmap(guard,4096)==0);
+    assert(rx_test_release(code,8192)==0 && munmap(guard,4096)==0);
 
     pwl_x64_cpu_state_t cpu={UINT64_C(0x8005003b),0x1000,0x406f0,0xd01};
     pwl_fp_layout_t fp={832,7,PWL_FP_XSAVE};

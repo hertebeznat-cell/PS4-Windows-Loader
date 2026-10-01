@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <stdlib.h>
+#include "rx_test_mapping.h"
 static pwl_resident_image_t resident_image;
 static unsigned checkpoint_count,stop_at;
 static int checkpoint(unsigned call,void *context) {
@@ -414,7 +415,7 @@ static void run_files(unsigned char *code,pwl_resident_data_t *d)
 static void run_copy(void)
 {
     size_t code_bytes=(sizeof(resident_bytes)+4095U)&~(size_t)4095U;
-    unsigned char *code=mmap(NULL,code_bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    unsigned char *code=rx_test_allocate(code_bytes);
     assert(code!=MAP_FAILED && (uintptr_t)code>UINT32_MAX);
     pwl_resident_data_t d={0};
     void *heap=mmap(NULL,65536,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
@@ -496,13 +497,13 @@ unsigned char *all_scratch=aligned_alloc(4096,4096);
     assert(restored.before==restored.after && restored.entered==stack_test.high);
     assert(munmap(stack,stack_bytes+2*guard)==0);
 #endif
-    assert(munmap(code,code_bytes)==0);
+    assert(rx_test_release(code,code_bytes)==0);
     assert(munmap(heap,65536)==0);
 }
 static void test_unsupported_slots(void)
 {
     size_t bytes=(resident_image.size+4095)&~(size_t)4095;
-    void *code=mmap(NULL,bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    void *code=rx_test_allocate(bytes);
     assert(code!=MAP_FAILED);memcpy(code,resident_image.bytes,resident_image.size);
     assert(mprotect(code,bytes,PROT_READ|PROT_EXEC)==0);
     pwl_efi_prepared_tables_t table;
@@ -523,7 +524,7 @@ static void test_unsupported_slots(void)
         }
     }
     assert(called==PWL_EFI_BOOT_SLOTS-PWL_EFI_BOOT_CALLBACKS-1);
-    assert(munmap(code,bytes)==0);
+    assert(rx_test_release(code,bytes)==0);
 }
 int main(void)
 {

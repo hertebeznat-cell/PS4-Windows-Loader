@@ -72,6 +72,13 @@ evidence of a CR3 switch. The build audit rejects imports/relocations/writable
 globals and verifies the early privilege guard. No Microsoft code runs in these
 tests, and no new console test is requested.
 
+Copied executable host mappings include a readable non-executable zero prefix
+page. Clang's function sanitizer reads before an indirect target to check its
+compiler metadata, which raw copied C/assembly does not carry. The prefix keeps
+that read within the allocation even at offset zero. ASan/UBSan and ABI checks
+stay enabled; the resident image and console code are unchanged by this harness
+layout correction.
+
 Architecture references: [AMD64 System Programming](https://docs.amd.com/v/u/en-US/24593_3.45_APM_Vol2_PUB),
 [AMD64 instruction reference](https://docs.amd.com/v/u/en-US/24594_3.38_APM_Vol3_PUB)
 and [Intel software developer manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html),

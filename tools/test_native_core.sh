@@ -80,7 +80,7 @@ python3 tests/test_pack_files.py
     loader/src/graphics.c loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/native_call.c loader/src/native_call.S loader/src/efi_entry_call.S loader/src/entry_pipeline.c loader/src/table_snapshot.c loader/src/cpu_state.c loader/src/efi_entry.c loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
     tests/test_native_workspace.c -o build/test-native-workspace
 ./build/test-native-workspace
-"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+"$compiler" -std=c11 -g -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -ffunction-sections -Wl,--gc-sections \
     -Iloader/include loader/src/cpu_state.c loader/src/native_call.c loader/src/native_call.S \
     tests/native_fp_abi.S tests/test_native_call.c -o build/test-native-call

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <stdlib.h>
+#include "rx_test_mapping.h"
 #define EFI __attribute__((ms_abi))
 typedef struct resident_test_image {
     unsigned char *code;
@@ -17,7 +18,7 @@ static resident_test_image_t resident_test_open(void)
 {
     resident_test_image_t t={0};t.image=resident_fixture();
     t.size=(t.image.size+4095)&~(size_t)4095;
-    t.code=mmap(NULL,t.size,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    t.code=rx_test_allocate(t.size);
     t.data=calloc(1,sizeof(*t.data));
     assert(t.code!=MAP_FAILED && (uintptr_t)t.code>UINT32_MAX && t.data);
     memcpy(t.code,t.image.bytes,t.image.size);
@@ -31,7 +32,7 @@ static resident_test_image_t resident_test_open(void)
     return t;
 }
 static void resident_test_close(resident_test_image_t *t)
-{ assert(munmap(t->code,t->size)==0);free(t->data); }
+{ assert(rx_test_release(t->code,t->size)==0);free(t->data); }
 #define LOAD_FROM(address,type,name) type name; do { \
     uintptr_t target=(uintptr_t)(address); \
     _Static_assert(sizeof(name)==sizeof(target),"AMD64 callback pointer"); \
