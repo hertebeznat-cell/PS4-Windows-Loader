@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 compiler=${CC:-cc}
 out=build/resident
 mkdir -p "$out"
-for unit in resident_services resident_events resident_clock resident_variables resident_images resident_image_map resident_graphics image_permissions main pe_loader firmware_memory firmware_files efi_tables freestanding; do
+for unit in resident_services resident_events resident_clock resident_time time resident_variables resident_images resident_image_map resident_graphics image_permissions main pe_loader firmware_memory firmware_files efi_tables freestanding; do
     "$compiler" -std=c11 -Os -Wall -Wextra -Wpedantic -Werror \
       -ffreestanding -fno-builtin -fno-stack-protector -fno-common \
       -fno-asynchronous-unwind-tables \
@@ -41,9 +41,10 @@ ld --no-undefined --no-relax --gc-sections -T loader/resident.ld \
   -u pwl_resident_text_reset -u pwl_resident_text_output -u pwl_resident_text_test \
   -u pwl_resident_text_query -u pwl_resident_text_set -u pwl_resident_text_attribute \
   -u pwl_resident_text_clear -u pwl_resident_text_position -u pwl_resident_text_cursor \
+  -u pwl_resident_get_time \
   "$out/resident_graphics.o" \
   "$out/resident_images.o" "$out/resident_image_map.o" "$out/image_permissions.o" "$out/image_jump.o" "$out/main.o" "$out/pe_loader.o" \
-  "$out/resident_clock.o" "$out/resident_variables.o" "$out/resident_events.o" "$out/firmware_files.o" "$out/resident_services.o" "$out/firmware_memory.o" "$out/efi_tables.o" \
+  "$out/resident_time.o" "$out/time.o" "$out/resident_clock.o" "$out/resident_variables.o" "$out/resident_events.o" "$out/firmware_files.o" "$out/resident_services.o" "$out/firmware_memory.o" "$out/efi_tables.o" \
   "$out/freestanding.o" "$out/binding.o" -o "$out/resident.elf"
 objcopy -O binary "$out/resident.elf" "$out/resident.bin"
 objdump -d "$out/resident.elf" > "$out/DISASSEMBLY.txt"

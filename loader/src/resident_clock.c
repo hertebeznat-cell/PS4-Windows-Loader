@@ -11,13 +11,17 @@ static int clock_valid(const pwl_resident_data_t *d)
 uint64_t pwl_resident_clock_now(pwl_resident_data_t *d,uint64_t *ticks)
 {
     if (!ticks || !clock_valid(d)) return PWL_EFI_UNSUPPORTED;
-    unsigned low,high;
+    unsigned low,high,before,c;
     /* CPUID brackets the sample on older AMD64 implementations too; no
      * assumption about LFENCE dispatch serialization or writable MSRs. */
-    __asm__ volatile("cpuid; rdtsc" : "=a"(low),"=d"(high) : "0"(0U) : "rbx","rcx","memory");
-    unsigned a=0,b,c,e;
+    __asm__ volatile("cpuid; rdtsc" : "=a"(low),"=d"(high),"=b"(before),"=c"(c) : "0"(1U) : "memory");
+    unsigned a=1,b,e;
     __asm__ volatile("cpuid" : "+a"(a),"=b"(b),"=c"(c),"=d"(e) :: "memory");
     uint64_t now=((uint64_t)high<<32)|low;
+    if(d->time_seed.frequency_hz &&
+       ((before>>24)!=d->time_seed.cpu || (b>>24)!=d->time_seed.cpu)) {
+        d->clock.ready=0;return PWL_EFI_DEVICE_ERROR;
+    }
     if (now<d->clock.last_tsc) {
         d->clock.ready=0;return PWL_EFI_DEVICE_ERROR;
     }

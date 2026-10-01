@@ -5,6 +5,7 @@
 #include "pwl_files.h"
 #include "pwl_pe_loader.h"
 #include "pwl_graphics.h"
+#include "pwl_time.h"
 #define PWL_RESIDENT_FILES 32U
 typedef struct pwl_efi_file_protocol {
     uint64_t revision,functions[10];
@@ -117,6 +118,7 @@ typedef struct pwl_resident_data {
     uint32_t boot_file_record;
     pwl_resident_variable_t variables[PWL_RESIDENT_VARIABLES];
     pwl_resident_clock_t clock; /* Must be explicitly calibrated/validated by platform preparation. */
+    pwl_time_seed_t time_seed; /* Observed UTC/TSC, boot-only; no RTC capabilities or persistence. */
     pwl_image_mapping_t image_mapping;
     uint64_t applications[PWL_RESIDENT_APPLICATIONS]; /* Owned pool addresses. */
     uint64_t current_application;

@@ -11,11 +11,12 @@ Reserved slot 17 stays zero as required by the Boot Services table layout.
 The adapter ignores all parameters, does not dereference output pointers, does
 not touch resident state and has no imports or privileged instructions. It uses
 assembly rather than a C function with a mismatched prototype for the different
-method signatures. The linked image has 66 entry symbols: the previous 30
+method signatures. The linked image has 67 entry symbols: the previous 30
 callbacks, this error adapter at index 30, and ten new event/discovery/configuration
 callbacks at 31..40, four variable callbacks at 41..44, and SetTimer/Stall/
 watchdog-disable callbacks at 45..47, image lifecycle at 48..51, private mapping/
-preloaded-entry adapters at 52/53, and graphics/text protocol methods at 54..65.
+preloaded-entry adapters at 52/53, graphics/text protocol methods at 54..65,
+and boot-only observed GetTime at 66 (the runtime table remains unpublished).
 Existing callback indices and the All30 diagnostic mask are
 unchanged. See [event/discovery services](RESIDENT_EVENT_SERVICES.md) and
 [variables and conditional timers](RESIDENT_VARIABLES_TIMERS.md).

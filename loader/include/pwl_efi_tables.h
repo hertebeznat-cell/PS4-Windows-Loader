@@ -6,7 +6,7 @@
  * pointers. This is an incomplete preparation fixture, not callable firmware.
  */
 #define PWL_EFI_BOOT_SLOTS 44U
-#define PWL_EFI_PREPARED_CALLBACKS 66U
+#define PWL_EFI_PREPARED_CALLBACKS 67U
 #define PWL_EFI_RUNTIME_SLOTS 14U
 #define PWL_EFI_BOOT_CALLBACKS 36U
 typedef struct pwl_efi_header {
@@ -58,6 +58,8 @@ typedef struct pwl_efi_prepared_tables {
  * Offsets 54..56: GOP QueryMode, SetMode, Blt.
  * Offsets 57..65: SimpleTextOutput Reset, OutputString, TestString, QueryMode,
  * SetMode, SetAttribute, ClearScreen, SetCursorPosition, EnableCursor.
+ * Offset 66: boot-only GetTime from observed calibrated UTC/TSC. Runtime
+ * publication/lifetime, hardware capabilities and ResetSystem still absent.
  * Caller must independently establish code provenance, relocations and ABI.
  */
 typedef struct pwl_efi_table_spec {

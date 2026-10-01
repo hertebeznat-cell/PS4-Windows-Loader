@@ -3,7 +3,7 @@
 This change adds seven linked resident entry points without process imports:
 GetVariable, GetNextVariableName, SetVariable, QueryVariableInfo, SetTimer,
 Stall and SetWatchdogTimer. Offsets 0..40 remain unchanged; new offsets are
-41..47 in that order. The image has 66 linked entries. Boot Services has 32
+41..47 in that order. The image has 67 linked entries. Boot Services has 32
 dedicated destinations (including the existing ExitBootServices refusal),
 7 generic EFI_UNSUPPORTED destinations and the null Reserved field.
 

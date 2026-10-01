@@ -15,6 +15,31 @@ mkdir -p build
 ./build/test-acpi
 sh tools/build_resident.sh
 "$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+ -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+ loader/src/devices.c tests/test_devices.c -o build/test-devices
+./build/test-devices
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+ -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+ loader/src/pci_mmio.c loader/src/transition_map.c tests/test_pci_mmio.c -o build/test-pci-mmio
+./build/test-pci-mmio
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -mno-red-zone \
+ -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include \
+ loader/src/cpu_environment.c loader/src/platform_call.c loader/src/devices.c \
+ loader/src/native_call.c loader/src/native_call.S loader/src/efi_entry.c \
+ loader/src/native_transition.c loader/src/alias_map.c loader/src/transition_map.c \
+ loader/src/resident_workspace.c loader/src/native_workspace.c loader/src/ps4_memory.c \
+ loader/src/ps4_binding.c loader/src/ps4_reader.c loader/src/ps4_profile.c \
+ loader/src/efi_tables.c loader/src/firmware_memory.c loader/src/firmware_files.c \
+ loader/src/firmware_media.c loader/src/acpi.c loader/src/acpi_configuration.c \
+ loader/src/main.c loader/src/pe_loader.c loader/src/handoff.c loader/src/paging.c \
+ loader/src/cpu_state.c loader/src/graphics.c loader/src/efi_entry_call.S tests/test_cpu_environment.c \
+ -o build/test-cpu-environment
+./build/test-cpu-environment
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
+ -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
+ loader/src/efi_tables.c loader/src/time.c tests/test_resident_time.c -o build/test-resident-time
+./build/test-resident-time
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror \
     -fsanitize="$sanitizers" -fno-omit-frame-pointer -Iloader/include -Ibuild/resident \
     -DPWL_PS4_MEMORY_HOST_TEST \
     loader/src/main.c loader/src/boot_source.c loader/src/pe_loader.c loader/src/paging.c \

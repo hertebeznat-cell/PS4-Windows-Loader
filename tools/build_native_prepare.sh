@@ -14,7 +14,7 @@ gcc -I"$sdk/libPS4/include" -Iloader/include -Ibuild/resident -Ipayload \
  -fshort-wchar -masm=intel -mno-red-zone -mgeneral-regs-only -fpie -fPIC \
  "-DPS4WL_BUILD_ID=\"$id\"" -c payload/native_prepare.c -o "$out/entry.o"
 objects=""
-for unit in main pe_loader handoff paging ps4_binding ps4_profile ps4_reader ps4_memory \
+for unit in main time cpu_environment cpu_state native_call pe_loader handoff paging ps4_binding ps4_profile ps4_reader ps4_memory \
  firmware_memory firmware_files firmware_media efi_tables graphics resident_workspace \
  native_workspace acpi acpi_configuration transition_map freestanding; do
  gcc -Iloader/include -Os -std=c11 -ffreestanding -fno-builtin -fno-stack-protector \

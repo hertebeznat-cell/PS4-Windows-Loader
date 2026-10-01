@@ -333,14 +333,14 @@ limit was raised from 128 to 256 records to retain all 197 records (148 files).
 See [EFI_ARCHIVE_AUDIT](docs/EFI_ARCHIVE_AUDIT.md). No Microsoft code was executed.
 
 Unimplemented Boot Services now have a resident EFI_UNSUPPORTED adapter instead
-of null callable pointers; the reserved field stays zero. The image exports 66
+of null callable pointers; the reserved field stays zero. The image exports 67
 entry symbols, preserving the previous 30 callback indices. Ten new destinations
 implement software event creation/signaling/checking/closing/grouping/cooperative
 waiting, allocated protocol/handle/open-record queries, and configuration-table
 publication with CRC and group notification. Seven additional methods provide
 volatile boot-only variable storage, conditional TSC-polled timers, Stall and
 watchdog disable. The Runtime Services wire table is prepared but deliberately
-unpublished, and PS4 clock calibration is not captured automatically. Complete
+unpublished. Native-Prepare now captures an observed console clock seed. Complete
 runtime/automatic lifecycle signaling and interrupt-driven timers remain absent. See
 [RESIDENT_VARIABLES_TIMERS](docs/RESIDENT_VARIABLES_TIMERS.md),
 [RESIDENT_EVENT_SERVICES](docs/RESIDENT_EVENT_SERVICES.md) and
@@ -417,6 +417,25 @@ are explicit assumptions, not support for arbitrary firmware builds. Host tests
 cover profile corruption, read failure, changing state and actual CPL3 refusal.
 The raw console image includes zeroed BSS and requires no dynamic relocations.
 CI publishes it separately from Native-Core and the old Stage 4.8 build.
+
+The native development core now includes a returning platform transaction:
+device stop/drain, 16-bit PCI interrupt/Bus Master masking with readback,
+configuration rollback before controller/CPU thaw, driver resume and retained
+ownership on failure. A CPL0 MMIO adapter audits explicitly supplied UC PCI
+function mappings; a live CPU environment capture compares descriptors, GS,
+APIC, PAT/MTRRs and FP layout around the returning call. Complete actual target
+inventory and driver/AP/controller hooks remain required; no successful
+default backend or console activation is supplied. See
+[platform call](docs/PLATFORM_CALL.md).
+
+Native-Prepare now observes console UTC/TSC and reports calibration and CPU
+capture status. The resident image adds boot-only GetTime from that seed.
+Runtime Services remains unpublished, and ExitBootServices remains unsupported
+until permanent hardware ownership and runtime lifetime are implemented.
+[Native time](docs/NATIVE_TIME.md) and the
+[launch status](docs/NATIVE_LAUNCH_STATUS.md) distinguish implemented code,
+host checks and missing console evidence. No emulator or repeat of the earlier
+console probes is needed for this change.
 
 This entry has not been run on PS4. It does not invoke Microsoft code, activate
 tables or hand off devices; stage 5 means preparation/audit/cleanup only. No

@@ -44,7 +44,13 @@ A 36 MiB archive requires roughly 42 MiB of contiguous owned RAM; allocation
 may fail. The backend makes one allocation attempt and does not retry.
 
 Notifications contain binding/preparation/audit/release status, physical arena
-address, size and relocated entry. Stage 5 means successful preparation/audit
+address, size and relocated entry. They also report CPU capture, clock status,
+observed TSC frequency, APIC identity and (on capture success) PAT/MTRR/root.
+The frontend observes console UTC/TSC before the callback; after checked binding
+the callback captures its live CPU environment and installs a calibrated clock
+only for matching CPU identity. See [native time](NATIVE_TIME.md). The prepared
+Runtime Services table is still unpublished; no Microsoft call is enabled.
+Stage 5 means successful preparation/audit
 and returned cleanup, never a Boot Manager execution result. If ownership
 cannot be released, the process keeps callback/data/bounce pages resident and
 stops preparation without unpinning them. This avoids forgetting an owner or

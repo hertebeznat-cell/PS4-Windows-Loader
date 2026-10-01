@@ -2,7 +2,7 @@
 
 LoadImage, StartImage, Exit and UnloadImage are now linked into the closed
 resident image at indices 48..51 and Boot slots 22..25. Indices 52/53 are private
-page-permission and preloaded-entry adapters. The complete image has 66 linked
+page-permission and preloaded-entry adapters. The complete image has 67 linked
 entries, including the fixed-framebuffer console, with no imports, ELF
 relocations or writable globals. It remains a preparation image, not a
 standalone PS4 boot binary.

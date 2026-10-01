@@ -65,6 +65,7 @@ pwl_status_t pwl_efi_tables_prepare(const pwl_efi_table_spec_t *s,
     const unsigned variable_slots[]={6,7,8,13};
     for (size_t i=0;i<4;i++)
         out->runtime.functions[variable_slots[i]]=spec.code_pa+spec.callback_offsets[41+i];
+    out->runtime.functions[0]=spec.code_pa+spec.callback_offsets[66];
     out->runtime.header.crc32=pwl_efi_crc32(&out->runtime,sizeof(out->runtime));
     out->system.boot_services = spec.data_pa + offsetof(pwl_efi_prepared_tables_t, boot);
     /* Preserve Reserved at slot 17 as NULL. Unsupported services have a real

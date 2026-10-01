@@ -53,7 +53,7 @@ names = ['raise_tpl', 'restore_tpl', 'allocate_pages', 'free_pages',
          'get_next_variable_name', 'set_variable', 'query_variable_info', 'set_timer', 'stall',
          'set_watchdog_timer', 'load_image', 'start_image', 'exit_image', 'unload_image', 'image_map', 'boot_entry',
          'gop_query', 'gop_set', 'gop_blt', 'text_reset', 'text_output', 'text_test', 'text_query',
-         'text_set', 'text_attribute', 'text_clear', 'text_position', 'text_cursor']
+         'text_set', 'text_attribute', 'text_clear', 'text_position', 'text_cursor', 'get_time']
 symbols = {}
 for line in subprocess.check_output(['nm', '-n', str(p/'resident.elf')], text=True).splitlines():
     fields = line.split()

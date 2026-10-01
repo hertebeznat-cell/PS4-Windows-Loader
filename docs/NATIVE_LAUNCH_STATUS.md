@@ -13,11 +13,11 @@ the processor. This is substantial executable code, not a PS4 launch result.
 | PS4 entry to native preparation/transition | Separate Native-Prepare entry connects USB archive and checked 13.52 binding to owned Boot Manager preparation/audit/release; live execution untested. CPU activation remains disconnected; Stage 4.8 remains preflight |
 | Actual RAM/MMIO map and low physical allocations | Owned arena only; no complete platform inventory or reservation of PA 0x00102000, requested in the earlier trace |
 | Returning CPU/FP transition | Implemented CPL0 call saves/restores enabled x87/SSE/AVX, handles TS/PGE, rechecks live state and audits both stacks/control/code; connected to entry preparation, not console main; actual PS4 CR3 execution untested |
-| CPU/exception/FP ownership | Context photographs are point-in-time observations; complete NMI/MCE/GDT/IDT/TSS/GS dependencies, established FP ownership and exception recovery remain absent |
-| Other CPUs, IRQ/DMA/PAT/MTRR and device handoff | No complete target-specific ownership implementation or validation |
+| CPU/exception/FP ownership | Actual CPL0 environment capture and returning comparison added (descriptors/GS/APIC/PAT/MTRR/FP); target execution untested. Complete NMI/MCE/TSS/stack dependencies, established FP ownership and exception recovery remain absent |
+| Other CPUs, IRQ/DMA/PAT/MTRR and device handoff | Stop/drain/mask/rollback transaction, audited CPL0 PCI MMIO adapter and required-hook call coordinator implemented; complete target inventory, actual driver drain/AP/controller hooks and hardware validation remain absent |
 | Screen output | GOP/text implemented for an explicit verified linear buffer; PS4 address, format, linearity, cacheability and mapping not supplied, so default output stays disabled |
-| Input and timing | Keyboard absent; PS4 TSC calibration absent; cooperative timer backend stays disabled without validated clock input |
-| Runtime Services | Wire table prepared but not published; complete time/reset/runtime lifetime and virtual-address services absent |
+| Input and timing | Keyboard absent; observed console UTC/TSC calibration implemented in Native-Prepare, CPU migration/drift refused; actual target result untested, timing unavailable on calibration failure |
+| Runtime Services | Boot-only observed GetTime added to prepared wire table; Runtime Services remains unpublished. Reset, persistent runtime lifetime and virtual-address services absent |
 | ACPI/SMBIOS/platform configuration | Original ACPI graph capture, validation, NVS reservations and EFI publication implemented and host-tested; actual target reader/discovery/pinning, complete AML/device dependencies and SMBIOS still missing |
 | ExitBootServices | Still explicitly unsupported; retiring an allocation manager is not hardware ownership transfer |
 | Windows loader/kernel files | The supplied EFI-only archive does not include a complete Windows installation |
@@ -38,6 +38,10 @@ alone cannot substitute for that backend.
 See [returning native call](NATIVE_RETURNING_CALL.md) for the newly implemented
 state sequence and the exact distinction between host FP execution, synthetic
 mapping checks and missing console activation evidence.
+
+See [platform call transaction](PLATFORM_CALL.md) for the new returning device
+and CPU coordinator and [native time](NATIVE_TIME.md) for the observed boot-time
+clock. Neither substitutes generic successful hooks for actual target work.
 
 The [ACPI preparation backend](NATIVE_ACPI.md) now connects validated original
 platform tables to the final-root entry audit. It does not import the historical
