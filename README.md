@@ -296,3 +296,5 @@ access or a Boot Manager launch. The unified archive-to-image preparation now bi
 the chosen resident file. Console preload and platform handoff remain incomplete.
 
 USB archive preloading is connected to owned boot-image preparation through `pwl_boot_source_prepare()`; see [boot source transaction](docs/BOOT_SOURCE.md). This remains preparation code, without a new console entry or Boot Manager execution.
+
+The 2026-10-01 PS4 All30 photographs confirm all thirty returning callback checks; see [hardware result](docs/EFI_ALL30.md). Independent-root mapping continuity checks are implemented separately in [transition mappings](docs/TRANSITION_MAP.md); no independent-root activation is claimed.

@@ -91,3 +91,8 @@ python3 tests/test_pack_files.py
  -fno-omit-frame-pointer tests/test_verified_usb.c -o build/test-verified-usb
 ./build/test-verified-usb
 "$compiler" -c -m64 loader/src/root_efi_call.S -o build/root-efi-call-check.o
+
+"$compiler" -std=c11 -Wall -Wextra -Wpedantic -Werror -fsanitize="$sanitizers" \
+ -fno-omit-frame-pointer -Iloader/include loader/src/transition_map.c \
+ tests/test_transition_map.c -o build/test-transition-map
+./build/test-transition-map

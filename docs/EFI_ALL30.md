@@ -20,3 +20,16 @@ called, no independent EFI root is activated, and platform memory/device
 ownership is not validated by success. This is not a Windows launcher or a
 promise of the final prerequisite. Console faults can still occur; if it hangs,
 do not repeat the run.
+
+## Confirmed hardware result, 2026-10-01
+
+User photographs of build b47eca5 confirm rc=0 stage=5 error=0,
+status=0 switched=1 restored=1 released=1 and passed_mask=3fffffff
+last_call=30 code_release=0. All thirty callback checks passed in the returning
+identical-root context. Root PA changed ac5a000 -> 527c8000 -> ac5a000;
+stack returned to ffffff8081c4f840 after using ffffff8081c5c000.
+The current direct-map indices were 439/412, not the earlier boot's 436/348.
+USB report persistence separately returned stage=-5 errno=0 and is not confirmed.
+Do not repeat this completed diagnostic. Native EFI entry and Windows remain
+unexecuted. Evidence: user photos 1000009859, 1000009865, 1000009866,
+1000009867 and 1000009868.
