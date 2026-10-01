@@ -382,6 +382,49 @@ static void test_resident_files(void)
     assert(!kernel.allocation && !w.arena.kernel_address);
 }
 
+static void test_boot_archive(void)
+{
+    unsigned char archive[4096]={0};memcpy(archive,"PWLFILES",8);
+    pe32(archive+8,1);pe32(archive+12,3);pe64(archive+16,sizeof(archive));
+    const char *names[]={"\\","\\Boot","\\Boot\\bootmgfw.efi"};
+    for (size_t i=0;i<3;i++) {
+        unsigned char *record=archive+24+i*536;
+        for (size_t j=0;names[i][j];j++) record[j*2]=(unsigned char)names[i][j];
+        pe64(record+512,2048);pe64(record+520,i==2 ? PE_FIXTURE_BYTES : 0);
+        pe32(record+528,i==2 ? 0 : 1);
+    }
+    pe_fixture(archive+2048);
+    const uint16_t path[]={'\\','b','o','o','t','\\','b','o','o','t','m','g','f','w','.','e','f','i',0};
+    pwl_ps4_memory_api_t a=api();pwl_native_workspace_t w={0};
+    pwl_native_request_t r={NULL,0,archive,sizeof(archive),65536,65536,16,1,NULL,0};
+    kernel.physical=UINT64_C(0x27a300000);
+    unsigned allocations=kernel.allocations;
+    const uint16_t missing[]={'\\','N','O',0};
+    assert(pwl_native_boot_prepare(&a,&r,&resident_image,missing,&w)==PWL_ERR_NOT_FOUND);
+    assert(kernel.allocations==allocations);
+    assert(pwl_native_boot_prepare(&a,&r,&resident_image,path,&w)==PWL_OK);
+    pwl_native_data_t *data=w.data.prepare_address;
+    assert(data->boot_origin_bound==1 && data->boot_file_record==2);
+    assert(data->loaded_image.device_handle==2 && data->protocols[0].handle==1);
+    assert(data->loaded_image.file_path==w.data.physical_address+offsetof(pwl_native_data_t,boot_file_path));
+    assert(data->boot_file_path[0]==4 && data->boot_file_path[1]==4);
+    assert(data->boot_file_path[4]=='\\' && data->boot_file_path[6]=='B');
+    assert(pe_get64((unsigned char *)w.boot.prepare_address+0x2000)==w.boot.physical_address+0x1010);
+    /* The source buffer is no longer needed; origin references the owned copy. */
+    memset(archive,0,sizeof(archive));
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)==PWL_OK);
+    data->boot_file_path[0]^=1;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->boot_file_path[0]^=1;
+    data->loaded_image.file_path++;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->loaded_image.file_path--;
+    data->boot_file_record=0;
+    assert(pwl_native_resident_environment_validate(&w,&resident_image)!=PWL_OK);
+    data->boot_file_record=2;
+    assert(pwl_native_workspace_release(&w)==PWL_OK && !kernel.allocation);
+}
+
 int main(void)
 {
     resident_image=resident_fixture();
@@ -391,6 +434,7 @@ int main(void)
     test_resident();
     test_resident_boot_image();
     test_resident_files();
+    test_boot_archive();
     puts("native workspace: owned PA/KVA, resident services, guarded mappings and rollback passed");
     return 0;
 }

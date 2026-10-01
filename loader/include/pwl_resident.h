@@ -42,6 +42,9 @@ typedef struct pwl_resident_data {
     pwl_efi_file_protocol_t file_template;
     pwl_resident_file_t files[PWL_RESIDENT_FILES];
     unsigned files_enabled;
+    unsigned boot_origin_bound;
+    uint32_t boot_file_record;
+    unsigned char boot_file_path[520]; /* FilePath node, UTF-16 name, End node. */
 } pwl_resident_data_t;
 
 typedef struct pwl_resident_image {

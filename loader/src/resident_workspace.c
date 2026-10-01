@@ -4,6 +4,53 @@ static const pwl_efi_guid_t loaded_guid={{0xa1,0x31,0x1b,0x5b,0x62,0x95,0xd2,0x1
 static const pwl_efi_guid_t filesystem_guid={{0x22,0x5b,0x4e,0x96,0x59,0x64,0xd2,0x11,
                                              0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 
+static void file_path_node(const uint16_t *path,unsigned char out[520])
+{
+    size_t length=0;
+    while (path[length]) length++;
+    size_t node_bytes=4+2*(length+1);
+    for (size_t i=0;i<520;i++) out[i]=0;
+    out[0]=4;out[1]=4; /* MEDIA_DEVICE_PATH / MEDIA_FILEPATH_DP */
+    out[2]=(unsigned char)node_bytes;out[3]=(unsigned char)(node_bytes>>8);
+    for (size_t i=0;i<length;i++) {
+        out[4+i*2]=(unsigned char)path[i];out[5+i*2]=(unsigned char)(path[i]>>8);
+    }
+    out[node_bytes]=0x7f;out[node_bytes+1]=0xff;out[node_bytes+2]=4;
+}
+
+pwl_status_t pwl_native_boot_prepare(const pwl_ps4_memory_api_t *api,
+    const pwl_native_request_t *r,const pwl_resident_image_t *image,
+    const uint16_t *path,pwl_native_workspace_t *w)
+{
+    if (!r || !w || !path || r->boot_image || r->boot_image_bytes)
+        return PWL_ERR_INVALID_ARGUMENT;
+    pwl_status_t status=pwl_files_validate(r->disk_image,r->disk_bytes);
+    if (status!=PWL_OK) return status;
+    pwl_file_view_t source;
+    uint64_t result=pwl_files_open(r->disk_image,r->disk_bytes,path,&source);
+    if (result==PWL_EFI_NOT_FOUND) return PWL_ERR_NOT_FOUND;
+    if (result || source.directory || !source.size) return PWL_ERR_BAD_IMAGE;
+    pwl_native_request_t request=*r;
+    request.boot_image=(const unsigned char *)r->disk_image+(size_t)source.offset;
+    request.boot_image_bytes=(size_t)source.size;
+    status=pwl_native_workspace_prepare_resident(api,&request,image,w);
+    if (status!=PWL_OK) return status;
+    pwl_native_data_t *d=w->data.prepare_address;
+    uint16_t actual_path[PWL_FILES_PATH];pwl_file_view_t copied;
+    result=pwl_files_at(w->media.prepare_address,(size_t)d->media.bytes,source.index,
+                        &copied,actual_path);
+    if (!result && d->files_enabled && copied.offset==source.offset && copied.size==source.size) {
+        file_path_node(actual_path,d->boot_file_path);
+        d->boot_file_record=source.index;d->boot_origin_bound=1;
+        d->loaded_image.device_handle=d->protocols[1].handle;
+        d->loaded_image.file_path=w->data.physical_address+offsetof(pwl_native_data_t,boot_file_path);
+        status=pwl_native_resident_environment_validate(w,image);
+        if (status==PWL_OK) return status;
+    } else status=PWL_ERR_BAD_IMAGE;
+    pwl_status_t cleanup=pwl_native_workspace_release(w);
+    return cleanup==PWL_OK ? status : cleanup;
+}
+
 pwl_status_t pwl_resident_image_validate(const pwl_resident_image_t *b)
 {
     if (!b || !b->bytes || b->size<8 || (b->binding_offset&7) ||
@@ -204,6 +251,28 @@ pwl_status_t pwl_native_resident_environment_validate(
         expected.image_base=w->boot.physical_address;
         expected.image_size=w->boot.size;
         expected.image_code_type=1;expected.image_data_type=2;
+        if (data->boot_origin_bound) {
+            if (data->boot_origin_bound!=1 || !data->files_enabled)
+                return PWL_ERR_INVALID_ARGUMENT;
+            uint16_t path[PWL_FILES_PATH];pwl_file_view_t source;
+            if (pwl_files_at(w->media.prepare_address,(size_t)data->media.bytes,
+                    data->boot_file_record,&source,path)!=PWL_EFI_SUCCESS ||
+                source.directory || !source.size) return PWL_ERR_INVALID_ARGUMENT;
+            uint64_t image_size;
+            if (pwl_pe_efi_size((const unsigned char *)w->media.prepare_address+(size_t)source.offset,
+                    (size_t)source.size,&image_size)!=PWL_OK || image_size!=w->boot.size)
+                return PWL_ERR_INVALID_ARGUMENT;
+            pwl_pe_image_t pe;
+            if (pwl_pe_inspect((const unsigned char *)w->media.prepare_address+(size_t)source.offset,
+                    (size_t)source.size,&pe)!=PWL_OK ||
+                w->boot_image.entry_address!=w->boot.physical_address+pe.entry_rva)
+                return PWL_ERR_INVALID_ARGUMENT;
+            unsigned char node[520];file_path_node(path,node);
+            for (size_t i=0;i<sizeof(node);i++)
+                if (node[i]!=data->boot_file_path[i]) return PWL_ERR_INVALID_ARGUMENT;
+            expected.device_handle=data->protocols[1].handle;
+            expected.file_path=w->data.physical_address+offsetof(pwl_native_data_t,boot_file_path);
+        }
         const unsigned char *actual=(const unsigned char *)&data->loaded_image;
         const unsigned char *wanted=(const unsigned char *)&expected;
         for (size_t i=0;i<sizeof(expected);i++)
@@ -215,6 +284,11 @@ pwl_status_t pwl_native_resident_environment_validate(
         for (size_t i=0;i<16;i++)
             if (protocol->guid.bytes[i]!=loaded_guid.bytes[i]) return PWL_ERR_INVALID_ARGUMENT;
     }
+    if (!data->boot_origin_bound) {
+        if (data->boot_file_record) return PWL_ERR_INVALID_ARGUMENT;
+        for (size_t i=0;i<sizeof(data->boot_file_path);i++)
+            if (data->boot_file_path[i]) return PWL_ERR_INVALID_ARGUMENT;
+    } else if (!w->boot.size) return PWL_ERR_INVALID_ARGUMENT;
     pwl_efi_table_spec_t spec={w->firmware.physical_address,image->size,
         w->data.physical_address+offsetof(pwl_native_data_t,efi),sizeof(data->efi),{0}};
     for (size_t i=0;i<PWL_EFI_PREPARED_CALLBACKS;i++)spec.callback_offsets[i]=image->callbacks[i];

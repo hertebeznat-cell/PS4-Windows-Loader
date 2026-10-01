@@ -291,5 +291,5 @@ OpenVolume and revision-1 file methods from an owned preloaded archive. Native
 preparation publishes the filesystem protocol with physical addresses; copied
 code checks cover opening, reading, directory enumeration and file information.
 This adds 11 filesystem callbacks (28 total resident entries), not live USB
-access or a Boot Manager launch. Origin DeviceHandle/FilePath binding and
-platform handoff remain incomplete.
+access or a Boot Manager launch. The unified archive-to-image preparation now binds DeviceHandle/FilePath to
+the chosen resident file. Console preload and platform handoff remain incomplete.

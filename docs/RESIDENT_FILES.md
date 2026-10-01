@@ -35,9 +35,8 @@ preparation. A matching archive magic triggers full validation and publishes
 SimpleFileSystem on its own handle with destination physical callback and
 interface addresses. A malformed matching archive aborts and releases the
 owner. Existing plain disk-image diagnostic inputs retain their previous
-behavior without a filesystem protocol. The original memory-buffer LoadedImage
-metadata still has no DeviceHandle/FilePath; origin binding must be provided
-before an actual Boot Manager launch.
+behavior without a filesystem protocol. The lower-level memory-buffer preparation still has no DeviceHandle/FilePath.
+The unified `pwl_native_boot_prepare` path below binds the actual archive origin.
 
 This is a cached file volume, not a FAT32 implementation or live USB driver.
 All required files must fit the owned resident memory and the record limit.
@@ -62,3 +61,26 @@ physical callback addresses and cleanup on preparation failure. No emulator or
 new console run is used.
 
 EFI reference: [UEFI media access protocols](https://uefi.org/specs/UEFI/2.10/13_Protocols_Media_Access.html).
+
+
+## Unified archive-to-image preparation
+
+`pwl_native_boot_prepare(api, request, resident_image, boot_path, workspace)`
+validates the archive, selects the requested EFI file, relocates that file in
+the owned workspace, publishes resident services and filesystem, and assigns
+LoadedImage.DeviceHandle to the filesystem handle. LoadedImage.FilePath points
+to an owned UTF-16 FilePath device-path node followed by EndEntire. Case-folded
+lookup preserves the original stored path in the published node.
+
+The request's explicit boot_image fields must be empty: the image bytes come
+from the chosen archive record. A missing path refuses before allocation; a
+directory/empty file refuses as a bad image. Mapping/preparation errors retain
+the existing cleanup contract. After success, the original archive buffer may
+be discarded. All published interfaces/path pointers use destination physical
+addresses rather than the source or preparation pointers.
+
+The environment audit validates the selected archive record, PE image size,
+filesystem origin, complete device-path bytes and LoadedImage pointer fields.
+Host integration checks cover selection, relocation above 4 GiB, source-buffer
+disposal, origin corruption and missing-file refusal. This does not execute the
+image or connect the console entry to a physical USB preload.

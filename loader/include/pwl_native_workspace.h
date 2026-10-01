@@ -63,6 +63,14 @@ pwl_status_t pwl_native_workspace_prepare_resident(const pwl_ps4_memory_api_t *a
     const pwl_native_request_t *request,const pwl_resident_image_t *image,
     pwl_native_workspace_t *workspace);
 
+/* Select the EFI application from the validated resident file archive, map it
+ * together with services, and bind LoadedImage to its actual file/volume.
+ * request.boot_image must be empty. Preparation only: no CPU transition or
+ * Microsoft code execution. All source bytes may be discarded after success. */
+pwl_status_t pwl_native_boot_prepare(const pwl_ps4_memory_api_t *api,
+    const pwl_native_request_t *request,const pwl_resident_image_t *image,
+    const uint16_t *boot_path,pwl_native_workspace_t *workspace);
+
 /* Preparation-only audit of the owned resident environment, including the
  * optional relocated EFI application's extent, entry and page permissions.
  * Does not certify
